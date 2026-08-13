@@ -1,0 +1,19 @@
+{
+  "name": "cse-collaborative-session-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CSE: Real-time collaborative code editor with granular, replayable access control for interviews and exams.",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
