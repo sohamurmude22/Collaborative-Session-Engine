@@ -1,19 +1,24 @@
 {
-  "name": "cse-collaborative-session-engine",
+  "name": "collaborative-session-engine",
   "version": "1.0.0",
+  "description": "Real-Time Collaborative Code Editor with Granular, Replayable Access Control for Interview and Exam Proctoring",
   "private": true,
-  "description": "CSE: Real-time collaborative code editor with granular, replayable access control for interviews and exams.",
-  "workspaces": [
-    "client",
-    "server"
-  ],
   "scripts": {
-    "install:all": "npm install --workspaces",
-    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w server && npm run build -w client",
-    "start": "npm run start -w server"
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
-  }
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "collaborative-editor",
+    "interview-proctoring",
+    "session-engine",
+    "real-time"
+  ],
+  "author": "",
+  "license": "ISC"
 }
