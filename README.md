@@ -1,203 +1,134 @@
-# Real-Time Collaborative Code Editor with Granular, Replayable Access Control for Interview and Exam Proctoring
+# CSE — Collaborative Session Engine
 
-A modern collaborative code editor and interview/exam proctoring platform engineered for granular file access control, live session synchronization, and full timeline playback.
+> **"Collaborate in real time, while controlling and auditing access in real time."**
 
----
+CSE is a production-style collaborative coding platform designed specifically for technical coding interviews, remote programming assessments, and monitored examination sessions.
 
-## Current Development Status
-
-> **Week 1 completed:**  
-> Project foundation and frontend-backend-database connectivity.
-
-### Development Roadmap Overview
-- [x] **Week 1: Project Setup & Architecture** (Foundational Express/Mongoose backend, React/Vite frontend, live health check, and environment setup)
-- [ ] **Week 2: Authentication & User Session Management**
-- [ ] **Week 3: Database Schemas & Session State Engine**
-- [ ] **Week 4: Monaco Code Editor Integration**
-- [ ] **Week 5: Real-Time Synchronization with Yjs & WebSockets**
-- [ ] **Week 6: Granular Access Control & Permissions Engine**
-- [ ] **Week 7: Code History, Keyframes & Replay Engine**
-- [ ] **Week 8: Exam & Interview Proctoring Mode (Anti-Cheating & Telemetry)**
-- [ ] **Week 9: Comprehensive Testing & Security Audits**
-- [ ] **Week 10: Final Deployment & Optimization**
+Unlike conventional collaborative editors (Google Docs, Live Share, CodeShare), CSE gives the interviewer/examiner **strict dynamic, session-based access control** and **complete millisecond-precision audit replay capabilities**.
 
 ---
 
-## Tech Stack
+## Key Features
 
-### Frontend
-- **Framework:** React 18
-- **Language:** TypeScript
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS
-- **HTTP Client:** Axios
-- **Routing:** React Router v6
-- **Icons:** Lucide React
+1. **Dedicated Permission Engine (`PermissionEngine`)**
+   - Every file edit, code execution, view request, and reveal action is validated server-side.
+   - Prevents candidate frontend tampering; returns HTTP 403 / WS error events on unauthorized attempts.
+   - Automatic query projection scrubbing: candidates **never** receive hidden questions, hints, test cases, or confidential solutions in network responses.
 
-### Backend
-- **Runtime:** Node.js (v20+)
-- **Framework:** Express.js
-- **Language:** TypeScript
-- **Database ODM:** Mongoose
-- **Security:** Helmet, CORS
-- **Configuration:** dotenv
+2. **Dynamic File Matrix**
+   - Instant file states: `VISIBLE_EDITABLE`, `VISIBLE_READONLY`, `LOCKED`, and `HIDDEN`.
+   - Real-time lock/unlock: interviewer clicks **Lock** and candidate immediately loses edit privileges in Monaco Editor.
 
-### Database
-- **Database:** MongoDB (Running locally or on MongoDB Atlas)
+3. **Progressive Reveal Engine**
+   - Interviewers can step-by-step reveal:
+     - Problem Statements
+     - Progressive algorithmic hints
+     - Secret & sample test cases
+     - Reference files
 
-### Tooling & Development
-- **Git & GitHub**
-- **Concurrently** (for multi-process dev orchestration)
+4. **Real-Time Collaboration & Presence**
+   - Built on Monaco Editor, WebSockets (`ws`), and Redis Pub/Sub (with an automatic in-memory fallback).
+   - Live presence tracking and bidirectional event broadcasts.
 
----
+5. **Millisecond-Precision Audit & Suspicious Activity Detection**
+   - Records all events: `SESSION_STARTED`, `FILE_LOCKED`, `FILE_UNLOCKED`, `QUESTION_REVEALED`, `CODE_RUN`, `PERMISSION_DENIED`, etc.
+   - Flags suspicious activity events (e.g. `LARGE_PASTE` > 500 characters) for manual examiner inspection without arbitrary automated bans.
 
-## Project Structure
+6. **Lock Timeline Replay**
+   - Interactive replay player with Play, Pause, Next, Previous, Scrubber, and Variable Speed (`0.5x`, `1x`, `2x`, `4x`).
+   - Reconstructs file permission states chronologically.
 
-```text
-collaborative-session-engine/
-│
-├── frontend/                     # React + TypeScript + Vite + Tailwind CSS + Axios
-│   ├── public/                   # Static assets
-│   ├── src/
-│   │   ├── components/           # Reusable UI components (Navbar, Layout, etc.)
-│   │   ├── context/              # Global React context providers
-│   │   ├── hooks/                # Custom React hooks
-│   │   ├── pages/                # Page components (Home, Login, Register, Dashboard)
-│   │   ├── services/             # Axios API client & endpoints (api.ts)
-│   │   ├── types/                # TypeScript type definitions
-│   │   ├── utils/                # Helper utilities
-│   │   ├── App.tsx               # Main Router setup
-│   │   ├── main.tsx              # React DOM entry point
-│   │   └── index.css             # Tailwind base styles
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── tsconfig.json
-│   ├── .env.example
-│   └── package.json
-│
-├── backend/                      # Node.js + Express + TypeScript + Mongoose
-│   ├── src/
-│   │   ├── config/
-│   │   │   └── db.ts             # Mongoose MongoDB connection
-│   │   ├── controllers/
-│   │   │   └── health.controller.ts # Health check controller
-│   │   ├── middleware/
-│   │   │   └── errorHandler.ts   # Centralized error handling
-│   │   ├── models/               # Mongoose schema models (Week 2+)
-│   │   ├── routes/
-│   │   │   ├── index.ts          # Root API router aggregator
-│   │   │   └── health.routes.ts  # Health check routes (/api/health)
-│   │   ├── services/             # Business logic layer (Week 2+)
-│   │   ├── utils/                # Backend utilities and helpers
-│   │   ├── app.ts                # Express application configuration & middlewares
-│   │   └── server.ts             # Server entry point & DB connector
-│   ├── tsconfig.json
-│   ├── .env.example
-│   └── package.json
-│
-├── .gitignore
-├── README.md
-└── package.json                  # Root orchestration package
-```
+7. **Isolated Code Execution**
+   - Sandboxed execution runner for **C++** (`g++`) and **Python** (`python3`) with execution timeouts and output buffer safeguards.
 
 ---
 
-## Prerequisites
+## Technology Stack
 
-Before running the project, ensure you have the following installed on your machine:
-- **Node.js** (v20.x or higher)
-- **npm** (v10.x or higher)
-- **MongoDB** running locally on port `27017` or a MongoDB Atlas URI
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Monaco Editor (`@monaco-editor/react`), Lucide Icons, Vite.
+- **Backend**: Node.js, Express, TypeScript, WebSockets (`ws`), MongoDB with Mongoose, Redis Pub/Sub (with in-memory fallback), JWT authentication, bcrypt.
+- **Tools**: Docker & Docker Compose, child_process runner.
 
 ---
 
-## Environment Variables
+## Quick Start & Running Locally
 
-### Backend Configuration (`backend/.env`)
+### Prerequisites
+- Node.js (v18+)
+- MongoDB running locally (`mongodb://127.0.0.1:27017`)
+- (Optional) Redis running locally (`redis://127.0.0.1:6379`)
+- C++ (`g++`) or Python installed on PATH for code execution.
 
-Copy `backend/.env.example` to `backend/.env`:
-
+### 1. Install Dependencies
 ```bash
-PORT=5000
-MONGO_URI=mongodb://127.0.0.1:27017/collaborative-code-editor
-CLIENT_URL=http://localhost:5173
-```
-
-### Frontend Configuration (`frontend/.env`)
-
-Copy `frontend/.env.example` to `frontend/.env`:
-
-```bash
-VITE_API_URL=http://localhost:5000/api
-```
-
----
-
-## How to Install
-
-Install all dependencies across root, backend, and frontend with a single command:
-
-```bash
-npm run install:all
-```
-
-Or install individually:
-
-```bash
-# Backend dependencies
+# In backend
 cd backend
 npm install
 
-# Frontend dependencies
-cd ../frontend
+# In frontend (Communication)
+cd ../Communication
 npm install
 ```
 
----
-
-## How to Run
-
-### Option 1: Run Both Concurrently (Recommended)
-
-From the project root:
-
+### 2. Seed Demo Data
+Populates the database with demo users, a Longest Increasing Subsequence session, initial files (`main.cpp`, `solution.cpp`, `tests.cpp`, `README.md`), hints, and test cases:
 ```bash
-npm run dev
+cd backend
+npx tsx src/scripts/seed.ts
 ```
 
-This will concurrently launch:
-- **Backend API:** `http://localhost:5000`
-- **Frontend App:** `http://localhost:5173`
+### 3. Run Security Tests
+```bash
+cd backend
+npx tsx src/scripts/testPermissions.ts
+```
 
-### Option 2: Run Separately
+### 4. Run Both Backend & Frontend
+Open two terminals or use root concurrently:
 
-#### Run Backend:
+**Terminal 1 (Backend - Port 5000 & WS):**
 ```bash
 cd backend
 npm run dev
 ```
 
-#### Run Frontend:
+**Terminal 2 (Frontend - Port 5173):**
 ```bash
-cd frontend
+cd Communication
 npm run dev
 ```
 
+Visit: `http://localhost:5173`
+
 ---
 
-## Verification & Health Check
+## Demo Credentials
 
-1. Open `http://localhost:5000/api/health` in your browser or terminal:
-   ```json
-   {
-     "success": true,
-     "message": "Server is running",
-     "timestamp": "2026-08-17T17:15:00.000Z",
-     "database": "connected"
-   }
-   ```
-2. Open `http://localhost:5173` in your browser:
-   - The Home page tests live communication between Frontend &rarr; Express Backend &rarr; MongoDB.
-   - Navigate to `/login`, `/register`, and `/dashboard` to inspect the clean placeholder routes prepared for Week 2.
+| Role | Email | Password |
+|---|---|---|
+| **Interviewer** | `interviewer@cse.com` | `Interviewer123` |
+| **Candidate** | `candidate@cse.com` | `Candidate123` |
+| **System Admin** | `admin@cse.com` | `Admin123` |
+
+*The login page also provides one-click demo login buttons for instant access.*
+
+---
+
+## Demo Flow Walkthrough
+
+1. **Login as Interviewer**: Log in with `interviewer@cse.com` / `Interviewer123`.
+2. **Access Session**: Click on "Senior Systems Engineer: Dynamic Programming Assessment" (`CSE-DEMO26`).
+3. **Open Candidate in Private Tab**: In an Incognito window, go to `http://localhost:5173/login`, click **Candidate** quick-fill, and join session `CSE-DEMO26`.
+4. **Observe Real-Time Matrix**:
+   - The candidate sees only `main.cpp` and `README.md`. Notice `solution.cpp` and `tests.cpp` are completely hidden.
+   - Both users see real-time presence.
+5. **Lock File**:
+   - On the Interviewer screen, click **Lock** next to `main.cpp`.
+   - The candidate's Monaco Editor immediately displays the locked badge, and keyboard edits are disabled.
+6. **Progressive Reveal**:
+   - On the Interviewer screen, click **Reveal** on **Hint 1**.
+   - Hint 1 instantly appears on the Candidate screen in real time without refreshing.
+7. **Run Code**:
+   - Candidate clicks **Run Code** on `main.cpp`. C++ compiles and executes, returning stdout in the terminal output panel.
+8. **Timeline Replay**:
+   - Interviewer navigates to `/sessions/:id/replay` to scrub, play, and view reconstructed permission states over time.
