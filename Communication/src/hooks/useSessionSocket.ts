@@ -6,6 +6,46 @@ interface UseSessionSocketProps {
   onMessage?: (message: WSMessage) => void;
 }
 
+const getWebSocketUrl = (sessionId: string, token: string | null): string => {
+  let wsEndpoint = import.meta.env.VITE_WS_URL as string | undefined;
+
+  if (!wsEndpoint) {
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    if (apiUrl) {
+      try {
+        const parsed = new URL(apiUrl, typeof window !== 'undefined' ? window.location.href : 'http://localhost:5000');
+        const proto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+        const cleanPath = parsed.pathname.replace(/\/api\/?$/, '');
+        wsEndpoint = `${proto}//${parsed.host}${cleanPath}`;
+      } catch {
+        // Fallback
+      }
+    }
+  }
+
+  if (!wsEndpoint) {
+    if (typeof window !== 'undefined') {
+      const isLocal =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        wsEndpoint = 'ws://localhost:5000';
+      } else {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsEndpoint = `${proto}//${window.location.host}`;
+      }
+    } else {
+      wsEndpoint = 'ws://localhost:5000';
+    }
+  }
+
+  const cleanBase = wsEndpoint.replace(/\/+$/, '');
+  const wsPath = cleanBase.endsWith('/ws') ? cleanBase : `${cleanBase}/ws`;
+  const delimiter = wsPath.includes('?') ? '&' : '?';
+
+  return `${wsPath}${delimiter}token=${encodeURIComponent(token || '')}&session=${encodeURIComponent(sessionId)}`;
+};
+
 export function useSessionSocket({ sessionId, onMessage }: UseSessionSocketProps) {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
@@ -37,7 +77,7 @@ export function useSessionSocket({ sessionId, onMessage }: UseSessionSocketProps
     }
 
     const token = localStorage.getItem('cse_token');
-    const wsUrl = `ws://localhost:5000/ws?token=${token || ''}&session=${sessionId}`;
+    const wsUrl = getWebSocketUrl(sessionId, token);
 
     try {
       const ws = new WebSocket(wsUrl);

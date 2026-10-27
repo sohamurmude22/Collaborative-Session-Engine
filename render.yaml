@@ -1,0 +1,53 @@
+services:
+  # ========================================================
+  # Backend Web Service (Node.js + Express + WebSockets)
+  # ========================================================
+  - type: web
+    name: cse-backend
+    runtime: node
+    plan: free
+    region: oregon # or ohio, frankfurt, singapore
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ========================================================
+  # Frontend Static Site (Vite + React + Monaco Editor)
+  # Free hosting on Render's global CDN
+  # ========================================================
+  - type: web
+    name: cse-frontend
+    runtime: static
+    buildCommand: cd Communication && npm install && npm run build
+    staticPublishPath: ./Communication/dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_WS_URL
+        sync: false

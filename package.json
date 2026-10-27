@@ -8,6 +8,11 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix Communication run dev",
     "build": "npm --prefix backend run build && npm --prefix Communication run build",
+    "build:all": "npm --prefix backend install && npm --prefix backend run build && npm --prefix Communication install && npm --prefix Communication run build",
+    "build:backend": "npm --prefix backend install && npm --prefix backend run build",
+    "build:frontend": "npm --prefix Communication install && npm --prefix Communication run build",
+    "start": "npm --prefix backend start",
+    "postinstall": "npm --prefix backend install && npm --prefix Communication install",
     "seed": "npm --prefix backend run seed",
     "test": "npm --prefix backend run test",
     "install:all": "npm install && npm --prefix backend install && npm --prefix Communication install"
