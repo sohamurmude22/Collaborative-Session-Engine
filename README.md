@@ -104,19 +104,19 @@ Visit: `http://localhost:5173`
 
 ## ☁️ Production Cloud Deployment Guides
 
-This repository is pre-configured with complete, production-ready Infrastructure-as-Code for both top deployment stacks:
+This repository is pre-configured with complete, production-ready configurations and step-by-step guides for cloud deployment:
 
-### 🌟 1. Vercel + Railway + MongoDB Atlas (Recommended for Speed & Stability)
-* **Frontend**: Vercel (Edge CDN for React + Monaco Editor with instant zero-spin-down loads)
-* **Backend**: Railway (Persistent Node.js container with full native WebSockets and sandboxed C++/Python compiler support)
-* **Database**: MongoDB Atlas (Managed Cloud Database)
+### 🌟 1. Vercel (Frontend) + Render (Backend) + MongoDB Atlas (Database)
+* **Frontend**: **Vercel** (Vite + React 18 + Monaco Editor on Edge CDN with instant zero-spin-down loads and SPA routing)
+* **Backend**: **Render** (Node.js + Express + persistent WebSockets `/ws` + zero-downtime health check `/api/health`)
+* **Database**: **MongoDB Atlas** (M0 Free Cloud Managed Database)
 
-👉 **[Complete Step-by-Step Vercel + Railway Guide (DEPLOYMENT.md)](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/DEPLOYMENT.md)**
+👉 **[Complete Step-by-Step Vercel + Render + Atlas Guide (DEPLOYMENT.md)](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/DEPLOYMENT.md)**
 
 ---
 
-### 🚀 2. Render Deployment (`render.yaml` Blueprint)
-* Deploys both frontend and backend using a single declarative `render.yaml` file on Render.
+### 🚀 2. Full-Stack Render Blueprint Deployment (`render.yaml`)
+* Deploys services using the declarative `render.yaml` Blueprint file on Render.
 
 👉 **[Render Blueprint Deployment Guide (RENDER_DEPLOYMENT.md)](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/RENDER_DEPLOYMENT.md)**
 
