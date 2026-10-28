@@ -12,7 +12,13 @@ This guide provides a comprehensive, step-by-step walkthrough for deploying the 
    - [Deploy Backend Web Service](#a-deploy-backend-web-service)
    - [Deploy Frontend Static Site (100% Free)](#b-deploy-frontend-static-site-100-free)
    - [Link Frontend to Backend CORS](#c-link-frontend-to-backend-cors)
-5. [Deployment Method 2: One-Click Render Blueprint (`render.yaml`)](#deployment-method-2-one-click-render-blueprint-renderyaml)
+5. [Deployment Method 2: Infrastructure as Code with `render.yaml` (Render Blueprint)](#deployment-method-2-infrastructure-as-code-with-renderyaml-render-blueprint)
+   - [5.1 Deep Breakdown of `render.yaml` Directives](#51-deep-breakdown-of-renderyaml-directives)
+   - [5.2 Step-by-Step Blueprint Deployment Walkthrough](#52-step-by-step-blueprint-deployment-walkthrough)
+   - [5.3 The Two-Way Cross-Service URL Handshake (Critical)](#53-the-two-way-cross-service-url-handshake-critical)
+   - [5.4 Database Seeding via Render Shell](#54-database-seeding-via-render-shell)
+   - [5.5 Verification & Smoke Testing Checklist](#55-verification--smoke-testing-checklist)
+   - [5.6 Check for Errors & Troubleshooting Matrix](#56-check-for-errors--troubleshooting-matrix)
 6. [Deployment Method 3: All-in-One Single Service](#deployment-method-3-all-in-one-single-service)
 7. [Database Seeding in Production](#database-seeding-in-production)
 8. [Environment Variables Reference](#environment-variables-reference)
@@ -169,20 +175,274 @@ Now that your frontend URL is live:
 
 ---
 
-## ⚡ Deployment Method 2: One-Click Render Blueprint (`render.yaml`)
+## ⚡ Deployment Method 2: Infrastructure as Code with `render.yaml` (Render Blueprint)
 
-This repository includes a pre-configured `render.yaml` file that sets up both the backend and frontend simultaneously with Infrastructure-as-Code.
+A **Render Blueprint** (`render.yaml`) allows you to define, configure, and orchestrate your entire multi-service stack (Node.js API, WebSockets, static CDN frontend, health checks, routing, and environment parameters) in a single declarative Infrastructure-as-Code (IaC) file committed directly to your repository.
 
-1. Ensure `render.yaml` is committed and pushed to your GitHub repository.
-2. Go to the [Render Dashboard](https://dashboard.render.com).
-3. Click **New +** > select **Blueprint**.
-4. Select your repository.
-5. Render will detect `render.yaml` and prompt you for the uncommitted environment parameters:
-   - `MONGO_URI`: Enter your MongoDB Atlas connection string.
-   - `CLIENT_URL`: Enter your anticipated frontend URL or leave blank to set after initial deploy.
-6. Click **Apply**. Render will automatically provision:
-   - Backend web service (`cse-backend`) with health checks and auto-generated `JWT_SECRET`.
-   - Frontend static site (`cse-frontend`) with SPA redirect rules and CDN caching.
+With Blueprints, you can spin up the complete Collaborative Session Engine with **one click** without manually configuring individual services, build commands, rewrite rules, or headers in the dashboard.
+
+---
+
+### 5.1 Deep Breakdown of `render.yaml` Directives
+
+Here is the exact `render.yaml` included in the root of this repository, with an in-depth breakdown of every property:
+
+```yaml
+services:
+  # ========================================================
+  # Backend Web Service (Node.js + Express + WebSockets)
+  # ========================================================
+  - type: web
+    name: cse-backend
+    runtime: node
+    plan: free
+    region: oregon # or ohio, frankfurt, singapore
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # ========================================================
+  # Frontend Static Site (Vite + React + Monaco Editor)
+  # Free hosting on Render's global CDN
+  # ========================================================
+  - type: web
+    name: cse-frontend
+    runtime: static
+    buildCommand: cd Communication && npm install && npm run build
+    staticPublishPath: ./Communication/dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_WS_URL
+        sync: false
+```
+
+#### Why Each Property is Configured This Way:
+
+| Section | Directive | Deep Explanation & Purpose |
+| :--- | :--- | :--- |
+| **Backend** | `type: web` & `runtime: node` | Provisions a dynamic Node.js container capable of handling long-lived HTTP and bidirectional WebSocket (`ws`) connections. |
+| | `plan: free` | Uses Render's free tier (512 MB RAM, 0.1 CPU). |
+| | `region: oregon` | Selects the data center region. Best practice: Choose the region geographically closest to your MongoDB Atlas cluster to minimize query latency. |
+| | `buildCommand: cd backend && npm install && npm run build` | Navigates into the `backend` subdirectory, installs dependencies, and runs `tsc` to compile TypeScript into production JavaScript in `backend/dist`. |
+| | `startCommand: cd backend && npm start` | Launches `node dist/server.js`, binding to `process.env.PORT` on `0.0.0.0` (all interfaces). |
+| | `healthCheckPath: /api/health` | **Critical for Zero-Downtime**: Render repeatedly pings `GET /api/health` during deployment. Only when this endpoint returns an HTTP 200 (confirming Express is up and MongoDB is connected) does Render switch traffic to the new instance. |
+| | `autoDeploy: true` | Automatically rebuilds and deploys the backend whenever new commits are pushed to the connected Git branch. |
+| | `envVars -> sync: false` | Marks sensitive variables (`MONGO_URI`, `CLIENT_URL`) so they are **never hardcoded in Git**. Render will securely prompt you for these values in the UI during Blueprint setup. |
+| | `envVars -> generateValue: true` | Instructs Render to automatically generate a cryptographically strong, 256-bit random string for `JWT_SECRET` upon first deployment. |
+| **Frontend** | `type: web` & `runtime: static` | Deploys the Vite React app directly onto Render's Edge CDN network. Unlike web services, static sites on Render are **100% free forever, never spin down, and offer unlimited global bandwidth**. |
+| | `buildCommand: cd Communication && npm install && npm run build` | Installs frontend dependencies and executes `tsc && vite build`, creating the minified client bundle. |
+| | `staticPublishPath: ./Communication/dist` | Informs Render's CDN which directory contains the compiled `index.html`, CSS, JS chunks, and Monaco Editor web worker assets. |
+| | `routes -> type: rewrite` | **Crucial for Single-Page Applications (React Router)**: Rewrites all inbound requests (`/*`) to `/index.html`. Without this, refreshing a route like `https://cse-frontend.onrender.com/sessions/CSE-DEMO26` will produce a 404 error. |
+| | `headers -> X-Frame-Options: SAMEORIGIN` | Enforces clickjacking protection while allowing trusted same-origin framing. |
+| | `headers -> Cache-Control: max-age=31536000, immutable` | Caches Vite-hashed assets (`/assets/*`) on user browsers and CDN edge caches for 1 year, guaranteeing maximum loading speed. |
+
+---
+
+### 5.2 Step-by-Step Blueprint Deployment Walkthrough
+
+Follow these detailed steps to launch the complete stack using `render.yaml`:
+
+#### Step 1: Push Repository with `render.yaml`
+Ensure `render.yaml` is located in the **root directory** of your repository on GitHub or GitLab:
+```bash
+git add render.yaml
+git commit -m "feat: configure Render blueprint for full-stack deployment"
+git push origin main
+```
+
+#### Step 2: Ensure MongoDB Atlas Whitelist is Configured
+Before deploying, make sure your MongoDB Atlas cluster accepts connections from Render:
+1. Log in to [MongoDB Atlas](https://cloud.mongodb.com/).
+2. Navigate to **Security** > **Network Access**.
+3. Confirm that `0.0.0.0/0` (Allow Access from Anywhere) is active. *(Render instances use dynamic outbound IPs; without `0.0.0.0/0`, backend connection will time out).*
+4. Under **Database Access**, verify your database user has `readWriteAnyDatabase` privileges.
+5. Copy your connection URI (e.g., `mongodb+srv://cse_admin:<password>@cluster0.abcde.mongodb.net/collaborative-code-editor?retryWrites=true&w=majority`).
+
+#### Step 3: Initiate Blueprint in Render Dashboard
+1. Log in to your [Render Dashboard](https://dashboard.render.com).
+2. Click the blue **New +** button in the top right corner.
+3. Select **Blueprint** from the dropdown menu.
+4. Search for and select your repository (`Collaborative-Session-Engine` or your repo name).
+5. Give your Blueprint Instance a name (e.g., `cse-stack`).
+6. Select your target branch (typically `main`).
+
+#### Step 4: Configure Blueprint Environment Parameters
+Render will parse `render.yaml` and present an input modal for all keys marked `sync: false`:
+
+| Parameter | Service | Value to Enter |
+| :--- | :--- | :--- |
+| `MONGO_URI` | `cse-backend` | Your full MongoDB Atlas connection string (with password and database name). |
+| `CLIENT_URL` | `cse-backend` | Enter `https://cse-frontend.onrender.com` (or temporary placeholder; you can update this after Render generates the exact domain). |
+| `REDIS_URL` | `cse-backend` | *(Leave blank)* — The engine automatically falls back to the high-performance in-memory pub/sub adapter. |
+| `VITE_API_URL` | `cse-frontend` | Enter `https://cse-backend.onrender.com/api` (or planned backend URL). |
+| `VITE_WS_URL` | `cse-frontend` | *(Optional - can leave blank)* — The frontend `useSessionSocket` hook automatically derives the secure `wss://` URL from `VITE_API_URL`. |
+
+> [!NOTE]
+> `JWT_SECRET` is set to `generateValue: true` in `render.yaml`, so Render creates this secret automatically without requiring manual input.
+
+#### Step 5: Click Apply & Monitor Live Deployment
+1. Click **Apply**.
+2. Render will immediately initiate parallel builds for both:
+   - **`cse-backend`** (Web Service)
+   - **`cse-frontend`** (Static Site)
+3. Click on **`cse-backend`** to monitor the build logs:
+   - Dependency installation: `npm install`
+   - TypeScript compilation: `tsc`
+   - Service startup: `cd backend && npm start`
+   - Successful startup logs:
+     ```text
+     [CSE Server] Collaborative Session Engine Backend listening on port 10000 (0.0.0.0)
+     [CSE Server] WebSocket endpoint available at: /ws
+     [CSE Server] Health check available at: /api/health
+     [Database] MongoDB Connected successfully
+     ```
+   - Health check confirmation:
+     ```text
+     ==> Health check passed for /api/health!
+     ==> Your service is live 🚀
+     ```
+4. Click on **`cse-frontend`** to verify Vite compilation:
+   - Output directory created: `./Communication/dist`
+   - CDN assets uploaded and deployed.
+
+---
+
+### 5.3 The Two-Way Cross-Service URL Handshake (Critical)
+
+In cloud deployments, there is a natural dependency between frontend and backend:
+- The **Backend** needs the exact **Frontend URL** for its CORS whitelist (`CLIENT_URL`).
+- The **Frontend** needs the exact **Backend URL** baked into its JavaScript bundle (`VITE_API_URL`).
+
+Because Render assigns random suffixes to service names if the base name is already taken across global Render users (e.g., `cse-backend-a1b2.onrender.com` instead of `cse-backend.onrender.com`), perform this **2-minute post-deploy handshake**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Dev as Developer
+    participant B as Backend Service (cse-backend)
+    participant F as Frontend CDN (cse-frontend)
+
+    Note over B,F: Initial Blueprint Deployment Completed
+    Dev->>B: 1. Copy live Backend URL (e.g., https://cse-backend-xyz.onrender.com)
+    Dev->>F: 2. Set VITE_API_URL = https://cse-backend-xyz.onrender.com/api
+    Dev->>F: 3. Trigger "Manual Deploy > Clear build cache & deploy"
+    Note over F: Vite rebuilds & bakes backend URL into bundle
+    Dev->>F: 4. Copy live Frontend URL (e.g., https://cse-frontend-abc.onrender.com)
+    Dev->>B: 5. Set CLIENT_URL = https://cse-frontend-abc.onrender.com
+    Note over B: Backend auto-restarts with updated CORS origin
+    Note over Dev,F: Full bidirectional communication established!
+```
+
+#### Step-by-Step Handshake Instructions:
+1. **Verify Backend URL**:
+   - Go to `cse-backend` in the Render dashboard and copy the URL at the top (e.g., `https://cse-backend-xyz.onrender.com`).
+2. **Update Frontend Environment**:
+   - Go to `cse-frontend` > **Environment**.
+   - Set `VITE_API_URL` to `https://cse-backend-xyz.onrender.com/api`.
+   - *(Optional)* Set `VITE_WS_URL` to `wss://cse-backend-xyz.onrender.com/ws`.
+   - Click **Save Changes**.
+   - Click **Manual Deploy** > **Clear build cache & deploy** *(⚠️ Mandatory: Vite bakes environment variables into static JS files at build time; clearing the cache ensures the new URL is baked into the compiled bundle).*
+3. **Update Backend CORS**:
+   - Go to `cse-backend` > **Environment**.
+   - Set `CLIENT_URL` to your live frontend URL (e.g., `https://cse-frontend-abc.onrender.com`).
+   - Click **Save Changes**. Render will automatically restart the backend service with the updated CORS policy.
+
+---
+
+### 5.4 Database Seeding via Render Shell
+
+Once the backend is live and connected to MongoDB Atlas, populate the production database with demo interviewers, candidates, coding questions, starter files, hints, and test cases:
+
+1. Open the [Render Dashboard](https://dashboard.render.com).
+2. Click on the **`cse-backend`** service.
+3. Click the **Shell** tab in the left sidebar (this opens an interactive terminal inside the running container).
+4. Run the seed script:
+   ```bash
+   cd backend && npm run seed
+   ```
+5. Confirm the output:
+   ```text
+   [Seed] Connected to MongoDB database
+   [Seed] Organization created: TechCorp Assessment Labs
+   [Seed] Created User: interviewer@cse.com (Role: INTERVIEWER)
+   [Seed] Created User: candidate@cse.com (Role: CANDIDATE)
+   [Seed] Created User: admin@cse.com (Role: ADMIN)
+   [Seed] Created Question: Longest Increasing Subsequence
+   [Seed] Seeded questions, hints, and test cases successfully!
+   ```
+
+---
+
+### 5.5 Verification & Smoke Testing Checklist
+
+Run through this quick verification checklist to guarantee 100% operational success:
+
+- [ ] **Health Endpoint Check**: Open `https://<your-backend>.onrender.com/api/health` in your browser. You should receive:
+  ```json
+  {
+    "success": true,
+    "message": "Server is running",
+    "database": "connected"
+  }
+  ```
+- [ ] **Frontend Loading**: Open your frontend URL (`https://<your-frontend>.onrender.com`). The login page should render with styled UI and demo quick-fill buttons.
+- [ ] **Authentication Smoke Test**: Click **Quick Fill: Interviewer** (`interviewer@cse.com`), then click **Sign In**. You should be routed to the dashboard displaying active sessions.
+- [ ] **Collaborative Room Test**: Enter the demo session (`CSE-DEMO26`). Check that the Monaco Editor loads syntax highlighting and the file list shows `main.cpp`.
+- [ ] **WebSocket Connection**: Open browser DevTools (**F12** > **Network** > **WS** tab). Verify a green status `101 Switching Protocols` connection to `/ws`.
+- [ ] **Permission Lock Test**: Click **Lock** on `main.cpp`. The editor status badge should immediately transition to **Locked (Read-Only)** in real time.
+
+---
+
+### 5.6 Check for Errors & Troubleshooting Matrix
+
+If any step fails during deployment, locate the exact symptom in this troubleshooting matrix:
+
+| # | Error / Symptom | Root Cause | Verified Solution |
+| :---: | :--- | :--- | :--- |
+| **1** | **`Invalid render.yaml: services[X] ...`**<br>Blueprint upload fails or gives a YAML syntax error. | Indentation error, tabs used instead of spaces, or unsupported fields. | • Verify YAML uses standard 2-space indentation (no tab characters).<br>• Ensure `type: web` is used for both services and `runtime: static` is specified for `cse-frontend`.<br>• Validate your YAML syntax locally with `npx yaml-lint render.yaml`. |
+| **2** | **Frontend calls `http://localhost:5000/api` in production**<br>Console error: `net::ERR_CONNECTION_REFUSED`. | `VITE_API_URL` was empty or missing during the Vite build, causing the bundle to fall back to the localhost default. | • Go to `cse-frontend` > **Environment**.<br>• Set `VITE_API_URL=https://<your-backend-name>.onrender.com/api`.<br>• Click **Manual Deploy** > **Clear build cache & deploy** *(crucial: Vite cannot read runtime environment variables in the browser; it must recompile)*. |
+| **3** | **CORS Error in Browser Console**<br>`Access to fetch at '...' from origin '...' has been blocked by CORS policy`. | The backend `CLIENT_URL` does not match the frontend domain, or contains a trailing slash. | • Check `cse-backend` > **Environment** > `CLIENT_URL`.<br>• Make sure it matches your frontend domain **without any trailing slash** (e.g. `https://cse-frontend.onrender.com`).<br>• To support both local testing and production, specify comma-separated origins:<br>`CLIENT_URL=http://localhost:5173,https://cse-frontend.onrender.com` |
+| **4** | **404 Not Found on Page Refresh**<br>Refreshing `/sessions/CSE-DEMO26` or `/dashboard` returns Render 404 page. | Missing Single-Page Application (SPA) rewrite rule on the static site. | • Ensure `render.yaml` contains the `routes` rewrite block:<br>```yaml
+routes:
+  - type: rewrite
+    source: /*
+    destination: /index.html
+```<br>• If already deployed, verify under `cse-frontend` > **Redirects/Rewrites** that `/* -> /index.html` (Rewrite) is active. |
+| **5** | **`MongooseServerSelectionError: connection timed out`**<br>Backend logs crash on startup. | MongoDB Atlas IP whitelist is blocking Render's dynamic IP addresses. | • In [MongoDB Atlas](https://cloud.mongodb.com/), go to **Network Access**.<br>• Click **Add IP Address** > select **Allow Access from Anywhere** (`0.0.0.0/0`).<br>• Verify password in `MONGO_URI` does not contain unescaped URL characters (replace `@` with `%40`, `#` with `%23`, etc.). |
+| **6** | **WebSocket fails or shows "Disconnected" badge**<br>`WebSocket connection to 'ws://...' failed: Mixed Content`. | Attempting to connect via unencrypted `ws://` over an HTTPS production site. | • Browsers block plain `ws://` connections from HTTPS sites as insecure mixed content.<br>• Ensure `useSessionSocket` or `VITE_WS_URL` uses `wss://` (secure WebSockets).<br>• Example: `wss://<your-backend>.onrender.com/ws`. |
+| **7** | **Build Error: `JavaScript heap out of memory`**<br>`npm run build` fails during `tsc` or Vite bundling. | Free tier memory limit (512 MB RAM) exceeded during simultaneous type checking and asset minification. | • Add an environment variable in the affected service:<br>`NODE_OPTIONS=--max-old-space-size=460`<br>• This instructs the V8 engine to trigger aggressive garbage collection before hitting Render's 512 MB memory boundary. |
+| **8** | **Health Check Timeout on `/api/health`**<br>Deployment hangs and rolls back after 5 minutes. | Express server is either bound to `127.0.0.1` instead of `0.0.0.0`, or hardcoded to a port other than `process.env.PORT`. | • Verify `backend/src/server.ts` uses:<br>`const PORT = Number(process.env.PORT) || 5000;`<br>`server.listen(PORT, '0.0.0.0', ...)`<br>• Ensure `/api/health` does not perform slow blocking synchronous database calls before sending the response. |
+| **9** | **Initial request takes 50+ seconds (Cold Start)**<br>App feels sluggish after being idle. | Free tier Render Web Services spin down automatically after 15 minutes of inactivity. | • This is expected on the Render Free Tier.<br>• **Free Solution**: Set up a free monitoring check on [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) to ping `https://<your-backend>.onrender.com/api/health` once every 10 minutes to keep the dyno warm. |
+| **10** | **TypeScript Compiler Error TS2307 / TS2503 during build**<br>`Cannot find module ... or its corresponding type declarations`. | Submodule or monorepo dependency missing in isolated container. | • Ensure `package.json` in `backend` and `Communication` have all required dependencies under `dependencies` or `devDependencies` (never rely on global system packages).<br>• Verify casing on imports matches physical file names on Linux (Render uses Linux containers where filenames are case-sensitive). |
+
+---
 
 ---
 
