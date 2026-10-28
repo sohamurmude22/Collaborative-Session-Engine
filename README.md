@@ -102,18 +102,23 @@ Visit: `http://localhost:5173`
 
 ---
 
-## ☁️ Cloud Deployment (Render)
+## ☁️ Production Cloud Deployment Guides
 
-This repository is fully configured for deployment on **[Render](https://render.com)**.
+This repository is pre-configured with complete, production-ready Infrastructure-as-Code for both top deployment stacks:
 
-For detailed step-by-step instructions (including free MongoDB Atlas setup, environment variables, WebSockets/WSS configuration, and 1-click Blueprints), refer to:
+### 🌟 1. Vercel + Railway + MongoDB Atlas (Recommended for Speed & Stability)
+* **Frontend**: Vercel (Edge CDN for React + Monaco Editor with instant zero-spin-down loads)
+* **Backend**: Railway (Persistent Node.js container with full native WebSockets and sandboxed C++/Python compiler support)
+* **Database**: MongoDB Atlas (Managed Cloud Database)
 
-👉 **[RENDER_DEPLOYMENT.md](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/RENDER_DEPLOYMENT.md)**
+👉 **[Complete Step-by-Step Vercel + Railway Guide (DEPLOYMENT.md)](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/DEPLOYMENT.md)**
 
-### Quick Summary of Render Deployment Options:
-- **Option 1 (Decoupled - Recommended)**: Deploy Backend as a Render Web Service (`backend`) and Frontend as a Render Static Site (`Communication`) for free CDN hosting.
-- **Option 2 (Blueprint - 1-Click)**: Connect your repository and deploy with the bundled `render.yaml`.
-- **Option 3 (Unified All-in-One)**: Deploy a single Web Service running `npm run build:all` and `npm start` where Express serves both API, WebSockets, and the compiled frontend.
+---
+
+### 🚀 2. Render Deployment (`render.yaml` Blueprint)
+* Deploys both frontend and backend using a single declarative `render.yaml` file on Render.
+
+👉 **[Render Blueprint Deployment Guide (RENDER_DEPLOYMENT.md)](file:///c:/Users/Soham/OneDrive/Desktop/Mini%20Project/RENDER_DEPLOYMENT.md)**
 
 ---
 
