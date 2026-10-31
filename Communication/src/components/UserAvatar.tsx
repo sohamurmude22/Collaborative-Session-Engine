@@ -32,32 +32,45 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   };
 
   const statusSizeClasses = {
-    xs: 'w-1.5 h-1.5 ring-1',
-    sm: 'w-2 h-2 ring-1.5',
-    md: 'w-2.5 h-2.5 ring-2',
+    xs: 'w-2 h-2 ring-1',
+    sm: 'w-2.5 h-2.5 ring-1.5',
+    md: 'w-3 h-3 ring-2',
     lg: 'w-3.5 h-3.5 ring-2',
     xl: 'w-4 h-4 ring-2'
   };
 
-  const effectiveAvatar = (!imageError && avatarUrl && avatarUrl.trim().length > 0) ? avatarUrl : DEFAULT_AVATAR;
+  const getInitials = (n: string) => {
+    return n
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
+
+  const hasValidImage = !imageError && avatarUrl && avatarUrl.trim().length > 0;
 
   return (
     <div className={`relative inline-flex shrink-0 ${className}`}>
       <div
-        className={`${sizeClasses[size]} rounded-full overflow-hidden flex items-center justify-center font-bold font-heading text-white shadow-sm ring-1 ring-white/20 select-none bg-slate-800`}
+        className={`${sizeClasses[size]} rounded-full overflow-hidden flex items-center justify-center font-bold font-heading text-white shadow-xs ring-1 ring-slate-200 dark:ring-white/10 select-none bg-gradient-to-tr from-indigo-600 to-violet-500`}
       >
-        <img
-          src={effectiveAvatar}
-          alt={name}
-          onError={() => setImageError(true)}
-          className="w-full h-full object-cover"
-        />
+        {hasValidImage ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="leading-none">{getInitials(name)}</span>
+        )}
       </div>
 
       {showStatus && (
         <span
-          className={`absolute bottom-0 right-0 rounded-full ring-white ${statusSizeClasses[size]} ${
-            isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+          className={`absolute bottom-0 right-0 rounded-full ring-white dark:ring-[#090d16] ${statusSizeClasses[size]} ${
+            isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-400'
           }`}
           title={isOnline ? 'Online' : 'Offline'}
         />

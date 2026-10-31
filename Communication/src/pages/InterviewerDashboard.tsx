@@ -1336,25 +1336,25 @@ ${privateNotes || 'No notes added.'}`;
       )}
 
       {/* Top Session Control Ribbon */}
-      <div className={`h-14 border-b ${themeConfig.border} ${themeConfig.bgCard} px-4 flex items-center justify-between shadow-xs z-20 transition-colors duration-200`}>
+      <div className={`h-14 border-b border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-[#090d16]/85 backdrop-blur-xl px-4 flex items-center justify-between shadow-xs z-20 transition-colors duration-200`}>
         <div className="flex items-center gap-3 md:gap-4">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-            <h1 className="text-sm font-bold text-slate-900 tracking-tight truncate max-w-xs md:max-w-md">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
+            <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate max-w-xs md:max-w-md font-heading">
               {session?.title}
             </h1>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20">
               {session?.sessionCode}
             </span>
             <button
               onClick={handleCopyCode}
               title="Copy session code to share"
-              className="p-1 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer"
+              className="p-1 text-slate-400 hover:text-indigo-500 rounded-lg transition cursor-pointer"
             >
-              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
 
@@ -1364,32 +1364,32 @@ ${privateNotes || 'No notes added.'}`;
             disabled={lockLoading}
             className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
               isMasterLocked
-                ? 'bg-rose-100 text-rose-800 border border-rose-300 shadow-sm animate-pulse'
-                : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shadow-xs animate-pulse'
+                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20'
             }`}
             title="Click to engage or disengage Master Lock Engine"
           >
             {isMasterLocked ? (
               <>
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-                <span>Lock Engine: ENGAGED (Frozen)</span>
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+                <span>Lock Engine: ENGAGED</span>
               </>
             ) : (
               <>
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                 <span>Lock Engine: Live</span>
               </>
             )}
           </button>
 
           {/* Live Interview Stopwatch & Phased Milestone Tracker */}
-          <div className="hidden xl:flex items-center gap-2 pl-2 border-l border-slate-200">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-800">
-              <Timer className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="hidden xl:flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+              <Timer className="w-3.5 h-3.5 text-indigo-500" />
               <span>{formatStopwatch(stopwatchSeconds)}</span>
               <button
                 onClick={() => setStopwatchRunning(!stopwatchRunning)}
-                className="ml-1 p-0.5 hover:text-indigo-600 cursor-pointer text-slate-500"
+                className="ml-1 p-0.5 hover:text-indigo-500 cursor-pointer text-slate-400"
                 title={stopwatchRunning ? 'Pause Stopwatch' : 'Start Stopwatch'}
               >
                 {stopwatchRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
@@ -1399,7 +1399,7 @@ ${privateNotes || 'No notes added.'}`;
                   setStopwatchRunning(false);
                   setStopwatchSeconds(0);
                 }}
-                className="p-0.5 hover:text-rose-600 cursor-pointer text-slate-400"
+                className="p-0.5 hover:text-rose-500 cursor-pointer text-slate-400"
                 title="Reset Stopwatch"
               >
                 <RefreshCw className="w-3 h-3" />
@@ -1409,28 +1409,28 @@ ${privateNotes || 'No notes added.'}`;
             <select
               value={interviewPhase}
               onChange={(e) => setInterviewPhase(Number(e.target.value))}
-              className="text-xs font-semibold px-2 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 cursor-pointer focus:outline-none"
+              className="text-xs font-semibold px-2 py-1 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 cursor-pointer focus:outline-none"
               title="Current Interview Milestone Phase"
             >
-              <option value={1}>🎯 Phase 1: Clarification (0-10m)</option>
-              <option value={2}>💡 Phase 2: Algorithm (10-25m)</option>
-              <option value={3}>💻 Phase 3: Coding (25-45m)</option>
-              <option value={4}>🧪 Phase 4: Big-O & Testing (45-60m)</option>
+              <option value={1}>Phase 1: Clarification (0-10m)</option>
+              <option value={2}>Phase 2: Algorithm (10-25m)</option>
+              <option value={3}>Phase 3: Coding (25-45m)</option>
+              <option value={4}>Phase 4: Big-O & Testing (45-60m)</option>
             </select>
           </div>
 
           {/* Live Candidate Status Indicator */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700">
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300">
             <span
               className={`w-2 h-2 rounded-full ${
                 candidateActivity === 'typing'
-                  ? 'bg-amber-500 animate-ping'
+                  ? 'bg-amber-400 animate-ping'
                   : candidateActivity === 'running'
-                  ? 'bg-purple-500 animate-pulse'
-                  : 'bg-emerald-500'
+                  ? 'bg-purple-400 animate-pulse'
+                  : 'bg-emerald-400'
               }`}
             />
-            <span className="text-[11px]">
+            <span className="text-[11px] font-mono">
               {candidateActivity === 'typing'
                 ? 'Candidate Typing...'
                 : candidateActivity === 'running'
@@ -1442,11 +1442,11 @@ ${privateNotes || 'No notes added.'}`;
 
         <div className="flex items-center gap-2">
           {/* Dynamic Layout Preset Selector */}
-          <div className="hidden lg:flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+          <div className="hidden lg:flex items-center bg-slate-100 dark:bg-white/5 p-0.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300">
             <button
               onClick={() => applyLayoutMode('standard')}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition ${
-                layoutMode === 'standard' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                layoutMode === 'standard' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Standard 3-Column Layout"
             >
@@ -1454,8 +1454,8 @@ ${privateNotes || 'No notes added.'}`;
             </button>
             <button
               onClick={() => applyLayoutMode('focus')}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition ${
-                layoutMode === 'focus' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                layoutMode === 'focus' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Focus Code: Fullscreen Editor"
             >
@@ -1463,8 +1463,8 @@ ${privateNotes || 'No notes added.'}`;
             </button>
             <button
               onClick={() => applyLayoutMode('split')}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition ${
-                layoutMode === 'split' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                layoutMode === 'split' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Split Code & Files"
             >
@@ -1472,31 +1472,12 @@ ${privateNotes || 'No notes added.'}`;
             </button>
             <button
               onClick={() => applyLayoutMode('proctor')}
-              className={`px-2 py-1 rounded text-[11px] font-semibold transition ${
-                layoutMode === 'proctor' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                layoutMode === 'proctor' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Proctoring & Audit Focus"
             >
               Proctor
-            </button>
-          </div>
-
-          {/* Editor Zoom Controls */}
-          <div className="hidden xl:flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button
-              onClick={() => setEditorFontSize((s) => Math.max(10, s - 1))}
-              className="p-1 hover:bg-white rounded text-slate-600"
-              title="Decrease Editor Font Size"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] font-mono px-1 font-semibold text-slate-700">{editorFontSize}px</span>
-            <button
-              onClick={() => setEditorFontSize((s) => Math.min(22, s + 1))}
-              className="p-1 hover:bg-white rounded text-slate-600"
-              title="Increase Editor Font Size"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -1506,17 +1487,17 @@ ${privateNotes || 'No notes added.'}`;
             return (
               <button
                 onClick={() => setShowTimestampDrawer(true)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer shadow-2xs ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-xs ${
                   suspiciousCount > 0
-                    ? 'bg-red-50 hover:bg-red-100 text-red-700 border-red-300 ring-2 ring-red-400/30'
-                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 ring-2 ring-rose-500/30'
+                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20'
                 }`}
                 title="Inspect Line-by-Line Millisecond Timestamp History & Burst Pastes"
               >
-                <Clock className={`w-3.5 h-3.5 ${suspiciousCount > 0 ? 'text-red-600 animate-pulse' : 'text-indigo-600'}`} />
+                <Clock className={`w-3.5 h-3.5 ${suspiciousCount > 0 ? 'text-rose-500 animate-pulse' : 'text-indigo-500'}`} />
                 <span className="hidden md:inline">Line Timestamps</span>
                 {suspiciousCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-600 text-white font-mono animate-bounce">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-mono animate-bounce">
                     {suspiciousCount} Flagged
                   </span>
                 )}
@@ -1527,54 +1508,31 @@ ${privateNotes || 'No notes added.'}`;
           {/* Session File Storage Archive Button */}
           <button
             onClick={handleOpenStorageModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-white/10 transition cursor-pointer shadow-xs"
             title="Open Session File Storage Archive"
           >
-            <FolderArchive className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">Files Storage ({files.length})</span>
+            <FolderArchive className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="hidden sm:inline">Files ({files.length})</span>
           </button>
 
           {/* Assessment Scorecard & Rubric Drawer Button */}
           <button
             onClick={() => setShowRubricModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200 transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/20 transition cursor-pointer shadow-xs"
             title="Open Candidate Evaluation Rubric & Private Scratchpad"
           >
-            <Award className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden sm:inline">Scorecard & Rubric</span>
+            <Award className="w-3.5 h-3.5 text-amber-500" />
+            <span className="hidden sm:inline">Rubric</span>
           </button>
 
-          {/* Educational Theme Selector */}
-          <ThemeSelector />
-
-          {/* Friends & Study Buddies Button */}
-          <button
-            onClick={() => setShowFriendsModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition border border-indigo-200 cursor-pointer"
-            title="Open Study Buddies & Invite Friends"
-          >
-            <Users className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">Friends</span>
-          </button>
-
-          {/* Add Collaborator */}
-          <button
-            onClick={() => {
-              setInviteEmail('');
-              setInviteSuccess(null);
-              setShowInviteModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Add Collaborator</span>
-          </button>
+          {/* Theme Selector */}
+          <ThemeSelector compact={true} />
 
           {/* Lifecycle actions */}
           {session?.status !== 'ACTIVE' && session?.status !== 'COMPLETED' && (
             <button
               onClick={() => handleSessionAction('start')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
             >
               <Play className="w-3 h-3 fill-current" />
               <span>Start</span>
@@ -1584,7 +1542,7 @@ ${privateNotes || 'No notes added.'}`;
           {session?.status === 'ACTIVE' && (
             <button
               onClick={() => handleSessionAction('pause')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
             >
               <Pause className="w-3 h-3" />
               <span>Pause</span>
@@ -1596,34 +1554,34 @@ ${privateNotes || 'No notes added.'}`;
             session?.status !== 'COMPLETED' ? (
               <button
                 onClick={() => setShowEndSessionConfirm(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition shadow-sm shadow-rose-600/20 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-600/25 cursor-pointer"
                 title="Finalize and End Session"
               >
                 <StopCircle className="w-3.5 h-3.5" />
                 <span>End Session</span>
               </button>
             ) : (
-              <span className="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg font-semibold border border-slate-200">
+              <span className="text-xs px-2.5 py-1 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-xl font-semibold border border-slate-200 dark:border-white/10">
                 Ended
               </span>
             )
           )}
 
-          {/* Leave Session with Database Reset Button */}
+          {/* Leave Session Button */}
           <button
             onClick={() => setShowLeaveConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition cursor-pointer"
-            title="Leave Session & Reset Database"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-xl border border-rose-500/25 transition cursor-pointer"
+            title="Leave Session"
           >
-            <LogOut className="w-3.5 h-3.5 text-rose-600" />
-            <span className="hidden sm:inline">Leave Session</span>
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Leave</span>
           </button>
 
           <Link
             to={`/sessions/${sessionId}/replay`}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 text-xs font-semibold rounded-lg border border-slate-200 shadow-xs transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 shadow-xs transition"
           >
-            <History className="w-3.5 h-3.5 text-indigo-600" />
+            <History className="w-3.5 h-3.5 text-indigo-500" />
             <span className="hidden md:inline">Replay</span>
           </Link>
         </div>

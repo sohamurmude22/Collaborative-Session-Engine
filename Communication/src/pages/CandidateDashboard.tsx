@@ -677,38 +677,38 @@ export const CandidateDashboard: React.FC = () => {
       )}
 
       {/* Top Session Ribbon */}
-      <div className={`h-14 border-b ${themeConfig.border} ${themeConfig.bgCard} px-4 flex items-center justify-between shadow-xs transition-colors duration-200 shrink-0`}>
+      <div className={`h-14 border-b border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-[#090d16]/85 backdrop-blur-xl px-4 flex items-center justify-between shadow-xs transition-colors duration-200 shrink-0`}>
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${themeConfig.accent}`} />
-            <h1 className="text-sm font-bold text-slate-900 tracking-tight truncate max-w-xs md:max-w-sm">
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${themeConfig.accent} shadow-[0_0_8px_rgba(99,102,241,0.5)]`} />
+            <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate max-w-xs md:max-w-sm font-heading">
               {session?.title}
             </h1>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-100 text-indigo-700 font-bold border border-slate-200">
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20">
               {session?.sessionCode}
             </span>
             <button
               onClick={handleCopyCode}
               title="Copy session code to share"
-              className="p-1 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer"
+              className="p-1 text-slate-400 hover:text-indigo-500 rounded-lg transition cursor-pointer"
             >
-              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 pl-2 border-l border-slate-200 shrink-0">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-            <span>{isConnected ? 'Sync Active' : 'Connecting...'}</span>
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 pl-2 border-l border-slate-200 dark:border-white/10 shrink-0">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-rose-500'}`} />
+            <span className="font-mono text-[11px]">{isConnected ? 'Sync Active' : 'Connecting...'}</span>
           </div>
         </div>
 
         {/* Dynamic Layout & Toolbar Controls */}
         <div className="flex items-center gap-2">
           {/* Layout Mode Selector */}
-          <div className="hidden lg:flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600">
+          <div className="hidden lg:flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
             <button
               onClick={() => {
                 setLayoutMode('standard');
@@ -716,8 +716,8 @@ export const CandidateDashboard: React.FC = () => {
                 setShowRightSidebar(true);
                 setShowBottomConsole(true);
               }}
-              className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
-                layoutMode === 'standard' ? 'bg-white shadow-xs text-indigo-600 font-bold' : 'hover:text-slate-900'
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'standard' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Standard
@@ -729,8 +729,8 @@ export const CandidateDashboard: React.FC = () => {
                 setShowRightSidebar(false);
                 setShowBottomConsole(false);
               }}
-              className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
-                layoutMode === 'focus' ? 'bg-white shadow-xs text-indigo-600 font-bold' : 'hover:text-slate-900'
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'focus' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Focus Code
@@ -742,8 +742,8 @@ export const CandidateDashboard: React.FC = () => {
                 setShowRightSidebar(false);
                 setShowBottomConsole(true);
               }}
-              className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
-                layoutMode === 'split' ? 'bg-white shadow-xs text-indigo-600 font-bold' : 'hover:text-slate-900'
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'split' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Split View
@@ -751,16 +751,16 @@ export const CandidateDashboard: React.FC = () => {
           </div>
 
           {/* Theme Selector */}
-          <ThemeSelector />
+          <ThemeSelector compact={true} />
 
           {/* Leave Session Button */}
           <button
             onClick={() => setShowLeaveConfirm(true)}
-            className="flex items-center gap-1 px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition shadow-2xs cursor-pointer"
-            title="Leave session and reset database"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/25 text-xs font-bold transition shadow-xs cursor-pointer"
+            title="Leave session"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Leave Session</span>
+            <span className="hidden sm:inline">Leave Room</span>
           </button>
         </div>
       </div>
@@ -769,15 +769,15 @@ export const CandidateDashboard: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Column: Files / Shared File Storage / Problems */}
         {showLeftSidebar && (
-          <div className={`w-72 md:w-80 border-r ${themeConfig.border} ${themeConfig.bgPage} flex flex-col shrink-0 transition-all duration-200`}>
+          <div className={`w-72 md:w-80 border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col shrink-0 transition-all duration-200`}>
             {/* Left Column Tabs */}
-            <div className="p-2 border-b border-slate-200/80 bg-slate-50/90 flex gap-1">
+            <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex gap-1">
               <button
                 onClick={() => setLeftTab('files')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   leftTab === 'files'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" /> Files ({files.length})
@@ -785,19 +785,19 @@ export const CandidateDashboard: React.FC = () => {
 
               <button
                 onClick={() => setLeftTab('storage')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   leftTab === 'storage'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <HardDrive className="w-3.5 h-3.5 text-indigo-600" /> Storage
+                <HardDrive className="w-3.5 h-3.5 text-indigo-500" /> Storage
               </button>
             </div>
 
             {/* Tab 1: File List */}
             {leftTab === 'files' && (
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {files.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-400">
                     No files found in session.
@@ -817,26 +817,26 @@ export const CandidateDashboard: React.FC = () => {
                         }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left border text-xs transition cursor-pointer ${
                           isActive
-                            ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold shadow-xs'
-                            : 'bg-white border-slate-200/70 text-slate-700 hover:bg-slate-50'
+                            ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-900 dark:text-indigo-300 font-bold shadow-xs'
+                            : 'bg-white/70 dark:bg-white/[0.02] border-slate-200/80 dark:border-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <FileCode className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <FileCode className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
                           <span className="truncate">{file.name}</span>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {isLocked ? (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1">
                               <Lock className="w-2.5 h-2.5" /> LOCKED
                             </span>
                           ) : isReadonly ? (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 flex items-center gap-1">
                               <Eye className="w-2.5 h-2.5" /> READ-ONLY
                             </span>
                           ) : (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
                               <Code2 className="w-2.5 h-2.5" /> EDITABLE
                             </span>
                           )}
@@ -869,11 +869,11 @@ export const CandidateDashboard: React.FC = () => {
         {/* Center Column: Monaco Editor & C++ Compiler Output Console */}
         <div className={`flex-1 flex flex-col ${themeConfig.bgCard} relative overflow-hidden transition-colors duration-200`}>
           {/* Editor Header Toolbar */}
-          <div className="h-10 border-b border-slate-200 bg-slate-50/80 px-4 flex items-center justify-between shrink-0">
+          <div className="h-10 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.02] px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-                className="p-1 rounded text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
                 title="Toggle Left Sidebar"
               >
                 {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
@@ -886,7 +886,7 @@ export const CandidateDashboard: React.FC = () => {
                     value={activeFileRenameVal}
                     onChange={(e) => setActiveFileRenameVal(e.target.value)}
                     autoFocus
-                    className="px-2 py-0.5 text-xs font-mono bg-white border border-indigo-500 rounded text-slate-900 focus:outline-none"
+                    className="px-2 py-0.5 text-xs font-mono bg-white dark:bg-[#090d16] border border-indigo-500 rounded text-slate-900 dark:text-white focus:outline-none"
                     placeholder="filename.cpp"
                   />
                   <button
@@ -898,15 +898,15 @@ export const CandidateDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setRenamingActiveFile(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </form>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono text-slate-800 font-bold flex items-center gap-1.5">
-                    <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="text-xs font-mono text-slate-800 dark:text-slate-200 font-bold flex items-center gap-1.5">
+                    <Code2 className="w-3.5 h-3.5 text-indigo-500" />
                     {activeFile ? activeFile.name : 'No file selected'}
                   </span>
 
@@ -917,7 +917,7 @@ export const CandidateDashboard: React.FC = () => {
                         setActiveFileRenameVal(activeFile.name);
                         setRenamingActiveFile(true);
                       }}
-                      className="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-indigo-500 transition cursor-pointer"
                       title="Rename Active File"
                     >
                       <Pencil className="w-3 h-3" />
@@ -927,16 +927,16 @@ export const CandidateDashboard: React.FC = () => {
               )}
 
               {isFileLocked ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                  <Lock className="w-3 h-3 text-rose-600" /> Locked by Interviewer
+                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                  <Lock className="w-3 h-3 text-rose-500" /> Locked
                 </span>
               ) : isFileReadonly ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  <Eye className="w-3 h-3 text-amber-600" /> Read Only
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  <Eye className="w-3 h-3 text-amber-500" /> Read-Only
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Live Editable
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Live Editable
                 </span>
               )}
             </div>
@@ -950,7 +950,7 @@ export const CandidateDashboard: React.FC = () => {
                     setNewCppName(`file_${files.length + 1}.cpp`);
                     setShowAddCppModal(true);
                   }}
-                  className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition cursor-pointer"
+                  className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20 transition cursor-pointer"
                   title="Add New .cpp File"
                 >
                   <Plus className="w-3 h-3" />
@@ -958,18 +958,18 @@ export const CandidateDashboard: React.FC = () => {
                 </button>
               )}
 
-              <div className="hidden sm:flex items-center gap-1 bg-white border border-slate-200 rounded-md p-0.5 text-slate-600">
+              <div className="hidden sm:flex items-center gap-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg p-0.5 text-slate-600 dark:text-slate-300">
                 <button
                   onClick={() => setEditorFontSize((s) => Math.max(12, s - 1))}
-                  className="p-1 hover:text-indigo-600 cursor-pointer"
+                  className="p-1 hover:text-indigo-500 cursor-pointer"
                   title="Decrease Font Size"
                 >
                   <ZoomOut className="w-3 h-3" />
                 </button>
-                <span className="text-xs font-mono px-1 font-bold text-slate-800">{editorFontSize}px</span>
+                <span className="text-xs font-mono px-1 font-bold text-slate-800 dark:text-slate-200">{editorFontSize}px</span>
                 <button
                   onClick={() => setEditorFontSize((s) => Math.min(26, s + 1))}
-                  className="p-1 hover:text-indigo-600 cursor-pointer"
+                  className="p-1 hover:text-indigo-500 cursor-pointer"
                   title="Increase Font Size"
                 >
                   <ZoomIn className="w-3 h-3" />
@@ -978,8 +978,10 @@ export const CandidateDashboard: React.FC = () => {
 
               <button
                 onClick={() => setShowBottomConsole(!showBottomConsole)}
-                className={`p-1.5 rounded-md border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                  showBottomConsole ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                  showBottomConsole
+                    ? 'bg-slate-200 dark:bg-white/15 text-slate-900 dark:text-white border-slate-300 dark:border-white/20'
+                    : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:bg-slate-50'
                 }`}
                 title="Toggle Console Output"
               >
@@ -990,15 +992,15 @@ export const CandidateDashboard: React.FC = () => {
               <button
                 onClick={handleRunCode}
                 disabled={executing || !activeFile}
-                className="flex items-center gap-1.5 px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 shadow-sm shadow-emerald-600/20 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 shadow-xs shadow-emerald-600/25 cursor-pointer"
               >
                 <Play className="w-3 h-3 fill-current" />
-                <span>{executing ? 'Compiling C++...' : 'Run C++ Code'}</span>
+                <span>{executing ? 'Compiling...' : 'Run C++'}</span>
               </button>
 
               <button
                 onClick={() => setShowRightSidebar(!showRightSidebar)}
-                className="p-1 rounded text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
                 title="Toggle Right Panel"
               >
                 {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
@@ -1007,7 +1009,7 @@ export const CandidateDashboard: React.FC = () => {
           </div>
 
           {/* Monaco Editor Canvas */}
-          <div className="flex-1 relative overflow-hidden bg-white">
+          <div className="flex-1 relative overflow-hidden bg-white dark:bg-[#090d16]">
             {activeFile ? (
               <Editor
                 height="100%"
@@ -1122,15 +1124,15 @@ export const CandidateDashboard: React.FC = () => {
 
         {/* Right Column: Live Camera & Microphone Video Feed + In-Session Live Chat */}
         {showRightSidebar && (
-          <div className={`w-80 md:w-96 border-l ${themeConfig.border} ${themeConfig.bgPage} flex flex-col overflow-hidden shrink-0 transition-all duration-200`}>
+          <div className={`w-80 md:w-96 border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0 transition-all duration-200`}>
             {/* Right Tabs: Live Media vs In-Session Chat */}
-            <div className="p-2 border-b border-slate-200/80 bg-slate-50/90 flex gap-1 shrink-0">
+            <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex gap-1 shrink-0">
               <button
                 onClick={() => setRightTab('media')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   rightTab === 'media'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <span>Live Feed & Problems</span>
@@ -1141,16 +1143,16 @@ export const CandidateDashboard: React.FC = () => {
                   setRightTab('chat');
                   setUnreadChatCount(0);
                 }}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 relative ${
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 relative ${
                   rightTab === 'chat'
-                    ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
-                <span>In-Session Chat</span>
+                <span>Chat</span>
                 {unreadChatCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-mono">
+                  <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">
                     {unreadChatCount}
                   </span>
                 )}
@@ -1159,7 +1161,7 @@ export const CandidateDashboard: React.FC = () => {
 
             {/* Right Content Tab 1: Live Video Feed & Questions */}
             {rightTab === 'media' && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {/* Camera & Microphone Session Feed */}
                 <LiveMediaSession
                   sessionId={sessionId!}
@@ -1172,48 +1174,50 @@ export const CandidateDashboard: React.FC = () => {
                 />
 
                 {/* Problems & Revealed Hints Section */}
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                      Interview Questions & Hints
+                <div className="p-4 rounded-2xl bg-white/70 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/10 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/10">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-heading">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      Problems & Hints
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      {questions.length} Question{questions.length !== 1 ? 's' : ''}
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                      {questions.length} Active
                     </span>
                   </div>
 
                   {questions.length === 0 ? (
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center">
-                      Questions will appear once revealed by the interviewer.
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 text-xs text-slate-400 text-center">
+                      Questions will appear once revealed by the host.
                     </div>
                   ) : (
                     questions.map((q) => (
                       <div key={q.id} className="space-y-2 text-xs">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-slate-900 text-sm">{q.title}</h4>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            q.difficulty === 'EASY'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : q.difficulty === 'HARD'
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm font-heading">{q.title}</h4>
+                          <span
+                            className={`text-[9px] font-mono font-bold px-2 py-0.2 rounded-full ${
+                              q.difficulty === 'EASY'
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                                : q.difficulty === 'HARD'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
+                            }`}
+                          >
                             {q.difficulty || 'MEDIUM'}
                           </span>
                         </div>
-                        <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{q.description}</p>
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{q.description}</p>
 
                         {/* Revealed Hints */}
                         {q.hints && q.hints.length > 0 && (
-                          <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-amber-500" /> Revealed Hints ({q.hints.length}):
+                          <div className="pt-2 border-t border-slate-100 dark:border-white/10 space-y-1.5">
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-amber-500" /> Hints ({q.hints.length}):
                             </span>
                             {q.hints.map((h) => (
-                              <div key={h.id} className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
-                                <p className="font-bold text-[11px] mb-0.5 text-amber-800">{h.title}</p>
-                                <p className="text-[11px] text-amber-700 leading-snug">{h.content}</p>
+                              <div key={h.id} className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200">
+                                <p className="font-bold text-[11px] mb-0.5">{h.title}</p>
+                                <p className="text-[11px] leading-snug">{h.content}</p>
                               </div>
                             ))}
                           </div>

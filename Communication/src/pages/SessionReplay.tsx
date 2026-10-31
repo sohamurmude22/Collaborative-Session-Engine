@@ -357,46 +357,46 @@ export const SessionReplay: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-[calc(100vh-64px)] ${themeConfig.bgPage} py-8 text-slate-800 font-sans transition-colors duration-200`}>
+    <div className={`min-h-[calc(100vh-64px)] ${themeConfig.bgPage} py-8 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-200`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Header Ribbon */}
-        <div className={`flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b ${themeConfig.border} gap-4`}>
+        <div className={`flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b border-slate-200/80 dark:border-white/10 gap-4`}>
           <div className="flex items-center gap-3">
             <Link
               to={`/sessions/${sessionId}/interviewer`}
-              className="p-2.5 rounded-xl bg-white/80 hover:bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-2xs transition cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 shadow-xs transition cursor-pointer"
               title="Return to Session Room"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl md:text-2xl font-bold font-heading text-slate-900 tracking-tight flex items-center gap-2">
-                  <Film className="w-6 h-6 text-indigo-600" />
-                  <span>Session Post-Review & Screen Recording</span>
+                <h1 className="text-xl md:text-2xl font-bold font-heading text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                  <Film className="w-6 h-6 text-indigo-500" />
+                  <span>Session Post-Review & Telemetry</span>
                 </h1>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  Past 10 Min Window
+                <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  10 Min History
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {session?.title} • Code: <strong className="font-mono text-indigo-700">{session?.sessionCode}</strong>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {session?.title} • Code: <strong className="font-mono text-indigo-600 dark:text-indigo-400">{session?.sessionCode}</strong>
               </p>
             </div>
           </div>
 
           {/* Tab Navigation: Screen Recording / Audit Timeline / Split View */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/90 border border-slate-200 shadow-xs">
+          <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xs">
             <button
               onClick={() => setActiveTab('recording')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'recording'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50'
               }`}
             >
               <Video className="w-3.5 h-3.5" />
-              <span>10-Min Screen Video</span>
+              <span>10-Min Video</span>
             </button>
 
             <button
@@ -404,11 +404,11 @@ export const SessionReplay: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'audit'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50'
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>Audit Timeline ({timeline.length})</span>
+              <span>Audit ({timeline.length})</span>
             </button>
 
             <button
@@ -416,11 +416,11 @@ export const SessionReplay: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'split'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Synchronized Dual View</span>
+              <span>Dual View</span>
             </button>
 
             <button
@@ -428,20 +428,20 @@ export const SessionReplay: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'storage'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50'
               }`}
             >
               <FolderArchive className="w-3.5 h-3.5" />
-              <span>Session Files Storage ({storageFiles.length})</span>
+              <span>Files ({storageFiles.length})</span>
             </button>
 
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 transition cursor-pointer"
               title="Delete session record and history"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-              <span>Delete Session</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
             </button>
           </div>
         </div>

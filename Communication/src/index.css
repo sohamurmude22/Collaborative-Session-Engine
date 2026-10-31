@@ -3,16 +3,46 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-base: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #ffffff;
+    --bg-surface-subtle: #f1f5f9;
+    --border-subtle: rgba(226, 232, 240, 0.9);
+    --border-hover: rgba(148, 163, 184, 0.6);
+    --border-accent: rgba(99, 102, 241, 0.5);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --glow-color: rgba(99, 102, 241, 0.15);
+  }
+
+  .dark {
+    --bg-base: #090d16;
+    --bg-surface: #0f172a;
+    --bg-surface-elevated: #141e33;
+    --bg-surface-subtle: #111a2e;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.18);
+    --border-accent: rgba(99, 102, 241, 0.6);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --glow-color: rgba(99, 102, 241, 0.25);
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: #0f172a;
-    background-color: #f8fafc;
+    color: var(--text-primary);
+    background-color: var(--bg-base);
     letter-spacing: -0.011em;
+    min-height: 100vh;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
 
   code, pre {
@@ -20,39 +50,47 @@
   }
 }
 
-/* Semi-Light Clean Scrollbars */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(241, 245, 249, 0.5);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(148, 163, 184, 0.6);
 }
 
-/* Creative Modern Visual Enhancements */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Animations */
 @keyframes pulseSubtle {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.85; transform: scale(1.02); }
+  50% { opacity: 0.88; transform: scale(1.015); }
 }
 
 @keyframes floatGentle {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  50% { transform: translateY(-4px); }
 }
 
 @keyframes recordingPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.15); }
+  50% { opacity: 0.35; transform: scale(1.2); }
 }
 
 @keyframes waveBar {
@@ -69,42 +107,82 @@
 .wave-bar-3 { animation: waveBar 0.8s ease-in-out infinite 0.2s; }
 .wave-bar-4 { animation: waveBar 0.8s ease-in-out infinite 0.4s; }
 
-.creative-glass {
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(226, 232, 240, 0.85);
+/* Futuristic Developer Glassmorphic UI Components */
+.glass-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
 }
 
-.creative-dark-glass {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
-.creative-neon-glow {
-  box-shadow: 0 0 25px rgba(139, 92, 246, 0.35), 0 0 50px rgba(217, 70, 239, 0.2);
+.glass-card {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.creative-cyan-glow {
-  box-shadow: 0 0 25px rgba(6, 182, 212, 0.35), 0 0 50px rgba(20, 184, 166, 0.2);
+.dark .glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.creative-badge-glow {
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+.glass-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px var(--glow-color);
 }
 
-.creative-lock-glow {
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.28);
+.dark .glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 16px 36px -12px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.25);
 }
 
-.creative-mesh-card {
-  background-image: radial-gradient(at 0% 0%, rgba(238, 242, 255, 0.6) 0px, transparent 50%),
-                    radial-gradient(at 100% 100%, rgba(243, 232, 255, 0.4) 0px, transparent 50%);
+/* Linear-style Highlight Border */
+.linear-highlight {
+  position: relative;
 }
 
-.floating-subtle {
-  animation: floatGentle 4s ease-in-out infinite;
+.linear-highlight::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.6), rgba(6, 182, 212, 0.6), transparent);
+  pointer-events: none;
 }
 
+/* Ambient Developer Grid Background */
+.developer-grid-bg {
+  background-image: radial-gradient(rgba(99, 102, 241, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .developer-grid-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Raycast / Linear Badges & Pills */
+.glow-pill {
+  box-shadow: 0 0 15px -2px rgba(99, 102, 241, 0.3);
+}
+
+.cyan-pill {
+  box-shadow: 0 0 15px -2px rgba(6, 182, 212, 0.3);
+}
+
+/* Monaco Code Overrides */
+.monaco-editor, .monaco-editor .overflow-guard {
+  border-radius: 0.5rem;
+}

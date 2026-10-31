@@ -68,7 +68,6 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
     try {
       setSearching(true);
       const res = await friendService.searchUsers(query);
-      // Filter out users already in friends list
       const friendIds = new Set(friends.map((f) => f.id));
       setSearchResults(res.filter((u) => !friendIds.has(u.id)));
     } catch (err: any) {
@@ -167,29 +166,29 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-xl bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[85vh]">
-        {/* Creative Header */}
-        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 via-white to-purple-50/80 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-150">
+      <div className="relative w-full max-w-xl glass-panel rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] linear-highlight">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.02] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                Study Buddies & Collaborators
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 font-heading">
+                Peer Network & Friends
+                <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
                   {friends.length}
                 </span>
               </h2>
-              <p className="text-xs text-slate-500">
-                Connect with peers, invite to active rooms, or launch instant pair sessions
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Connect with collaborators and launch instant pair rooms
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -200,48 +199,48 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
           <div
             className={`mx-6 mt-4 p-3 rounded-xl flex items-center gap-2.5 text-xs font-medium ${
               message.type === 'success'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25'
             }`}
           >
             {message.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
             )}
             <span>{message.text}</span>
           </div>
         )}
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 px-6 pt-3 gap-6 bg-slate-50/50">
+        <div className="flex border-b border-slate-200/80 dark:border-white/10 px-6 pt-3 gap-6 bg-slate-50/30 dark:bg-black/20">
           <button
             onClick={() => {
               setActiveTab('list');
               setMessage(null);
             }}
-            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
               activeTab === 'list'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            My Friends ({friends.length})
+            Friends List ({friends.length})
           </button>
           <button
             onClick={() => {
               setActiveTab('add');
               setMessage(null);
             }}
-            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
               activeTab === 'add'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
             <UserPlus className="w-4 h-4" />
-            Add New Friend
+            Add Collaborator
           </button>
         </div>
 
@@ -251,59 +250,59 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
             {loading ? (
               <div className="py-12 flex flex-col items-center justify-center text-slate-400">
                 <Loader2 className="w-7 h-7 animate-spin text-indigo-600 mb-2" />
-                <p className="text-xs">Loading study buddies...</p>
+                <p className="text-xs">Loading collaborator network...</p>
               </div>
             ) : friends.length === 0 ? (
-              <div className="py-12 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 p-6">
-                <div className="w-12 h-12 mx-auto rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3">
+              <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-white/10 p-6 bg-slate-50/50 dark:bg-white/[0.02]">
+                <div className="w-12 h-12 mx-auto rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
                   <Users className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-800 mb-1">No friends added yet</h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
-                  Add classmates, peers, or interview partners to collaborate in real-time code rooms with zero setup!
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">No friends added yet</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-4">
+                  Add classmates, peers, or interview partners to collaborate in real-time rooms with 1-click.
                 </p>
                 <button
                   onClick={() => setActiveTab('add')}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Find & Add Friends
+                  Find & Add Collaborator
                 </button>
               </div>
             ) : (
               friends.map((friend) => (
                 <div
                   key={friend.id}
-                  className="p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-indigo-300 hover:shadow-sm transition-all flex items-center justify-between gap-3 group"
+                  className="p-3.5 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/60 dark:bg-white/[0.02] hover:border-indigo-500/40 hover:shadow-xs transition-all flex items-center justify-between gap-3 group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-100 to-purple-100 border border-indigo-200 text-indigo-700 font-bold flex items-center justify-center text-sm shadow-inner flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-inner shrink-0">
                       {friend.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-800 truncate">{friend.name}</p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{friend.name}</p>
                         <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          className={`text-[9px] font-mono font-semibold px-2 py-0.2 rounded-full ${
                             friend.role === 'INTERVIEWER'
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/25'
+                              : 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border border-cyan-500/25'
                           }`}
                         >
                           {friend.role}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 truncate">{friend.email}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{friend.email}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* If inside active session, show 1-click Invite to Active */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* If inside active session, show 1-click Invite */}
                     {currentSessionId && (
                       <button
                         onClick={() => handleInviteToCurrent(friend)}
                         disabled={actionLoading === `invite-${friend.id}`}
-                        className="px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        className="px-2.5 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
                         title="Invite to this active room"
                       >
                         {actionLoading === `invite-${friend.id}` ? (
@@ -319,8 +318,8 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                     <button
                       onClick={() => handleStartSession(friend)}
                       disabled={actionLoading === `session-${friend.id}`}
-                      className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-1.5 shadow-sm shadow-indigo-500/20 transition-all disabled:opacity-50"
-                      title="Launch a new collaborative session with this buddy"
+                      className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-1.5 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      title="Launch collaborative session"
                     >
                       {actionLoading === `session-${friend.id}` ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -334,7 +333,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                     <button
                       onClick={() => handleRemoveFriend(friend.id, friend.name)}
                       disabled={actionLoading === friend.id}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
                       title="Remove friend"
                     >
                       {actionLoading === friend.id ? (
@@ -354,23 +353,23 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
         {activeTab === 'add' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Quick Add by Email */}
-            <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Add Friend Directly by Email
+            <div className="bg-slate-50 dark:bg-white/[0.02] p-4 rounded-xl border border-slate-200/80 dark:border-white/10">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 font-heading">
+                Add Directly by Email
               </label>
               <div className="flex gap-2">
                 <input
                   type="email"
-                  placeholder="peer@example.com"
+                  placeholder="collaborator@domain.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
-                  className="flex-1 px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder-slate-400"
+                  className="flex-1 px-3.5 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-slate-400"
                 />
                 <button
                   onClick={() => handleAddFriend()}
                   disabled={!emailInput.trim() || !!actionLoading}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                 >
                   {actionLoading === emailInput.trim() ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -384,51 +383,51 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
 
             {/* Live Search Users */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Search Registered Classmates & Peers
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 font-heading">
+                Search Registered Users
               </label>
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
-                  placeholder="Search by student name or email..."
+                  placeholder="Search by name or email..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder-slate-400"
+                  className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-slate-400"
                 />
                 {searching && (
-                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600 absolute right-3.5 top-3" />
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500 absolute right-3.5 top-3" />
                 )}
               </div>
 
               {/* Search Results list */}
               <div className="mt-3 space-y-2 max-h-56 overflow-y-auto">
                 {searchResults.length > 0 ? (
-                  searchResults.map((user) => (
+                  searchResults.map((u) => (
                     <div
-                      key={user.id}
-                      className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between hover:border-indigo-200 transition-colors"
+                      key={u.id}
+                      className="p-3 bg-white dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/10 rounded-xl flex items-center justify-between hover:border-indigo-500/30 transition"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs">
-                          {user.name.charAt(0).toUpperCase()}
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-bold flex items-center justify-center text-xs">
+                          {u.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-800">{user.name}</p>
-                          <p className="text-[11px] text-slate-400">{user.email}</p>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">{u.name}</p>
+                          <p className="text-[11px] text-slate-400">{u.email}</p>
                         </div>
                       </div>
                       <button
-                        onClick={() => handleAddFriend(undefined, user.id)}
-                        disabled={actionLoading === user.id}
-                        className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        onClick={() => handleAddFriend(undefined, u.id)}
+                        disabled={actionLoading === u.id}
+                        className="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 rounded-lg flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
                       >
-                        {actionLoading === user.id ? (
+                        {actionLoading === u.id ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
                           <UserPlus className="w-3.5 h-3.5" />
                         )}
-                        <span>Add</span>
+                        <span>Connect</span>
                       </button>
                     </div>
                   ))
@@ -441,14 +440,14 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between text-xs text-slate-400">
+        <div className="px-6 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.02] flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            Friends can join code rooms instantly with 1-click
+            1-click launch or room invite
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+            className="px-4 py-1.5 font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer"
           >
             Close
           </button>
