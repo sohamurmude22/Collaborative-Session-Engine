@@ -178,13 +178,19 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     Object.entries(peers).forEach(([peerId, peer]) => {
       if (peer.stream) {
         const videoEl = remoteVideoRefs.current[peerId];
-        if (videoEl && videoEl.srcObject !== peer.stream) {
-          videoEl.srcObject = peer.stream;
-          videoEl.play().catch(() => {});
+        if (videoEl) {
+          if (videoEl.srcObject !== peer.stream) {
+            videoEl.srcObject = peer.stream;
+          }
+          if (peer.isCamOn) {
+            videoEl.play().catch(() => {});
+          }
         }
         const audioEl = remoteAudioRefs.current[peerId];
-        if (audioEl && audioEl.srcObject !== peer.stream) {
-          audioEl.srcObject = peer.stream;
+        if (audioEl) {
+          if (audioEl.srcObject !== peer.stream) {
+            audioEl.srcObject = peer.stream;
+          }
           audioEl.volume = 1.0;
           audioEl.muted = false;
           audioEl.play().catch(() => setAutoplayBlocked(true));
@@ -470,13 +476,13 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         // Fast video sync: immediately attach stream to video element
         setTimeout(() => {
           const videoEl = remoteVideoRefs.current[peerId];
-          if (videoEl && videoEl.srcObject !== fullStream) {
+          if (videoEl) {
             videoEl.srcObject = fullStream;
             videoEl.play().catch(() => {});
           }
 
           const audioEl = remoteAudioRefs.current[peerId];
-          if (audioEl && audioEl.srcObject !== fullStream) {
+          if (audioEl) {
             audioEl.srcObject = fullStream;
             audioEl.volume = 1.0;
             audioEl.muted = false;
@@ -590,6 +596,34 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         localRawAudioStreamRef.current = micStream;
 
+        const rawAudioTrack = micStream.getAudioTracks()[0];
+        if (rawAudioTrack) {
+          rawAudioTrack.onended = () => {
+            if (localRawAudioStreamRef.current) {
+              localRawAudioStreamRef.current.getAudioTracks().forEach((t) => t.stop());
+              localRawAudioStreamRef.current = null;
+            }
+            if (localProcessedAudioTrackRef.current) {
+              localProcessedAudioTrackRef.current.stop();
+              localProcessedAudioTrackRef.current = null;
+            }
+            cleanupAudioPipeline();
+            Object.values(peerConnectionsRef.current).forEach((pc) => {
+              if (!pc || pc.connectionState === 'closed') return;
+              const at = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
+              if (at) {
+                at.sender.replaceTrack(null).catch(() => {});
+              }
+            });
+            setIsMicOn(false);
+            sendMessage('MEDIA_STATUS_UPDATE', {
+              isMicOn: false,
+              isCamOn: isCamOnRef.current,
+              isSpeaking: false
+            });
+          };
+        }
+
         // Process through Web Audio DSP pipeline with High-pass, Low-pass, Compressor, and Noise Gate
         const cleanAudioTrack = setupNoiseCancelledAudioPipeline(micStream);
         cleanAudioTrack.enabled = true;
@@ -664,6 +698,31 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
         const videoTrack = videoStream.getVideoTracks()[0];
         localVideoStreamRef.current = videoStream;
+
+        if (videoTrack) {
+          videoTrack.onended = () => {
+            if (localVideoStreamRef.current) {
+              localVideoStreamRef.current.getVideoTracks().forEach((t) => t.stop());
+              localVideoStreamRef.current = null;
+            }
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = null;
+            }
+            Object.values(peerConnectionsRef.current).forEach((pc) => {
+              if (!pc || pc.connectionState === 'closed') return;
+              const vt = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
+              if (vt) {
+                vt.sender.replaceTrack(null).catch(() => {});
+              }
+            });
+            setIsCamOn(false);
+            sendMessage('MEDIA_STATUS_UPDATE', {
+              isMicOn: isMicOnRef.current,
+              isCamOn: false,
+              isSpeaking: isLocalSpeakingRef.current
+            });
+          };
+        }
 
         // 1. Immediately bind local camera feed with zero latency
         if (localVideoRef.current) {
@@ -1172,7 +1231,15 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               >
                 {/* Local Video Stream Element */}
                 <video
-                  ref={localVideoRef}
+                  ref={(el) => {
+                    localVideoRef.current = el;
+                    if (el && localVideoStreamRef.current) {
+                      if (el.srcObject !== localVideoStreamRef.current) {
+                        el.srcObject = localVideoStreamRef.current;
+                      }
+                      el.play().catch(() => {});
+                    }
+                  }}
                   autoPlay
                   playsInline
                   muted
@@ -1229,8 +1296,10 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                   <video
                     ref={(el) => {
                       remoteVideoRefs.current[peer.userId] = el;
-                      if (el && peer.stream && el.srcObject !== peer.stream) {
-                        el.srcObject = peer.stream;
+                      if (el && peer.stream) {
+                        if (el.srcObject !== peer.stream) {
+                          el.srcObject = peer.stream;
+                        }
                         el.play().catch(() => {});
                       }
                     }}
@@ -1265,7 +1334,16 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                         size="md"
                         isOnline={true}
                       />
-                      <span className="text-[10px] text-slate-400 mt-1.5 font-medium">{peer.userName}</span>
+                      <span className="text-[10px] text-slate-400 mt-1.5 font-medium flex items-center gap-1">
+                        {peer.isCamOn ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                            <span>Syncing Video...</span>
+                          </>
+                        ) : (
+                          <span>{peer.userName}</span>
+                        )}
+                      </span>
                     </div>
                   )}
 

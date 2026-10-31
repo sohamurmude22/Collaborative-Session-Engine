@@ -50,7 +50,9 @@ import {
   SquareTerminal,
   Pencil,
   Plus,
-  X
+  X,
+  Archive,
+  Radio
 } from 'lucide-react';
 import { FriendsModal } from '../components/FriendsModal.js';
 import { ThemeSelector } from '../components/ThemeSelector.js';
@@ -649,6 +651,23 @@ export const CandidateDashboard: React.FC = () => {
 
   return (
     <div className={`h-[calc(100vh-64px)] flex flex-col ${themeConfig.bgPage} text-slate-800 overflow-hidden font-sans transition-colors duration-200 relative`}>
+      {/* Completed Session Notification Banner */}
+      {session?.status === 'COMPLETED' && (
+        <div className="bg-slate-900 text-slate-100 px-4 py-2.5 text-xs flex items-center justify-between z-30 shadow-md">
+          <div className="flex items-center gap-2">
+            <Archive className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-semibold text-amber-300">Session Ended by Host:</span>
+            <span className="text-slate-300">The interviewer has finalized this session. Your code and interview history have been saved.</span>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+          >
+            <span>Return to Dashboard</span>
+          </button>
+        </div>
+      )}
+
       {/* Real-time Status Alert Banner */}
       {statusMessage && (
         <div className="bg-indigo-600 text-white px-4 py-1.5 text-xs text-center font-medium shadow-sm animate-fade-in shrink-0">
@@ -1192,15 +1211,48 @@ export const CandidateDashboard: React.FC = () => {
           } border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
         >
           {/* Right Tabs: Live Media vs In-Session Chat */}
-          <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setMobileTab('editor')}
-              className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
-              title="Back to Editor"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {/* Right Column Header */}
+          <div className="h-10 px-3 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setMobileTab('editor')}
+                className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
+                title="Back to Editor"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                Live Video Call
+              </span>
+            </div>
 
+            <button
+              onClick={() => setShowRightSidebar(false)}
+              className="p-1 text-slate-400 hover:text-slate-200 rounded-md transition cursor-pointer"
+              title="Collapse right sidebar"
+            >
+              <PanelRightClose className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Persistent LiveMediaSession Feed (Always visible face-to-face video) */}
+          <div className="p-3 shrink-0 border-b border-slate-200/80 dark:border-white/10">
+            <LiveMediaSession
+              sessionId={sessionId!}
+              currentUserId={user?.id || ''}
+              currentUserName={user?.name || 'Candidate'}
+              currentUserRole={user?.role || 'CANDIDATE'}
+              currentUserAvatarUrl={user?.avatarUrl}
+              sendMessage={sendMessage}
+              lastSocketMessage={lastWsMsg}
+              initialParticipants={initialParticipants}
+              isDocked={false}
+            />
+          </div>
+
+          {/* Sub-Tabs: Problems & Chat */}
+          <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center gap-1 shrink-0">
             <button
               onClick={() => {
                 setRightTab('media');
@@ -1212,7 +1264,8 @@ export const CandidateDashboard: React.FC = () => {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <span>Live Feed & Problems</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Problems ({questions.length})</span>
             </button>
 
             <button
@@ -1235,26 +1288,6 @@ export const CandidateDashboard: React.FC = () => {
                 </span>
               )}
             </button>
-          </div>
-
-          {/* Persistent LiveMediaSession Feed (Never unmounts, preserving active voice & WebRTC) */}
-          <div className="p-3 shrink-0">
-            <LiveMediaSession
-              sessionId={sessionId!}
-              currentUserId={user?.id || ''}
-              currentUserName={user?.name || 'Candidate'}
-              currentUserRole={user?.role || 'CANDIDATE'}
-              currentUserAvatarUrl={user?.avatarUrl}
-              sendMessage={sendMessage}
-              lastSocketMessage={lastWsMsg}
-              initialParticipants={initialParticipants}
-              isDocked={rightTab !== 'media'}
-              onExpand={() => {
-                setShowRightSidebar(true);
-                setRightTab('media');
-                setMobileTab('media');
-              }}
-            />
           </div>
 
           {/* Right Content Tab 1: Problems & Revealed Hints */}
