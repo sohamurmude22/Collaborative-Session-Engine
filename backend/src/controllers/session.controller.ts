@@ -587,7 +587,6 @@ export const leaveSession = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const user = req.user!;
     const { id } = req.params;
-    const { resetDatabase: shouldReset } = req.body;
 
     const session = await Session.findById(id);
     if (!session) {
@@ -595,64 +594,85 @@ export const leaveSession = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Mark participant left
+    const currentUserId = user._id ? user._id.toString() : (user as any).id;
+    const interviewerId = PermissionEngine.extractId(session.interviewerId);
+    const isCreator = Boolean(interviewerId && interviewerId === currentUserId);
+
+    // Mark participant left in SessionParticipant
     await SessionParticipant.findOneAndUpdate(
       { sessionId: session._id, userId: user._id },
       { status: 'OFFLINE', leftAt: new Date(), lastSeen: Date.now() }
     );
 
-    // Notify other participants
+    // Notify other participants that this user left
     await redisService.publish(`session:${session._id}:events`, {
       type: 'USER_LEFT',
       sessionId: session._id.toString(),
       payload: {
         userId: user._id.toString(),
         name: user.name,
-        role: user.role
+        role: user.role,
+        isCreator
       }
     });
 
-    // Reset database & remove demo account on session leave
-    if (shouldReset || PermissionEngine.isInterviewerOrAdmin(user, session)) {
-      await File.deleteMany({ sessionId: session._id });
-      await Question.deleteMany({ sessionId: session._id });
-      await Hint.deleteMany({ sessionId: session._id });
-      await TestCase.deleteMany({ sessionId: session._id });
-      await SessionParticipant.deleteMany({ sessionId: session._id });
-      await AuditLog.deleteMany({ sessionId: session._id });
+    if (isCreator) {
+      // The one who creates session can only end session; as soon as he leaves, the session ends!
       session.status = 'COMPLETED';
       session.endedAt = new Date();
       await session.save();
 
-      // Remove the demo accounts
-      await User.deleteMany({
-        email: { $in: ['interviewer@cse.com', 'candidate@cse.com', 'admin@cse.com'] }
+      await AuditService.log({
+        sessionId: session._id.toString(),
+        actorId: user._id.toString(),
+        actorName: user.name,
+        actorRole: user.role,
+        eventType: 'SESSION_ENDED',
+        resourceType: 'SESSION',
+        resourceId: session._id.toString(),
+        metadata: { reason: 'Session ended because session creator left the session.' }
       });
 
       await redisService.publish(`session:${session._id}:events`, {
-        type: 'SESSION_RESET',
+        type: 'SESSION_STATUS_CHANGED',
         sessionId: session._id.toString(),
         payload: {
-          message: 'Session has ended, database was reset, and demo accounts removed.'
+          status: 'COMPLETED',
+          endedBy: user.name,
+          reason: 'Session creator has left/ended the session.'
+        }
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: 'Session ended successfully because session creator left.',
+          sessionEnded: true,
+          status: 'COMPLETED'
+        }
+      });
+    } else {
+      // The other user who joined the session: can only leave, session does NOT end, it goes on!
+      await AuditService.log({
+        sessionId: session._id.toString(),
+        actorId: user._id.toString(),
+        actorName: user.name,
+        actorRole: user.role,
+        eventType: 'USER_LEFT',
+        resourceType: 'SESSION',
+        resourceId: session._id.toString(),
+        metadata: { action: 'LEAVE_SESSION', isCreator: false }
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: 'Left session successfully. The session remains active.',
+          sessionEnded: false,
+          status: session.status
         }
       });
     }
-
-    await AuditService.log({
-      sessionId: session._id.toString(),
-      actorId: user._id.toString(),
-      actorName: user.name,
-      actorRole: user.role,
-      eventType: 'USER_LEFT',
-      resourceType: 'SESSION',
-      resourceId: session._id.toString(),
-      metadata: { action: 'LEAVE_SESSION', resetDatabase: !!shouldReset }
-    });
-
-    res.status(200).json({
-      success: true,
-      data: { message: 'Left session successfully. Session data cleaned and demo accounts removed.' }
-    });
   } catch (error: any) {
     res.status(500).json({
       success: false,

@@ -164,18 +164,20 @@ export const InterviewerDashboard: React.FC = () => {
   // Derived Master Lock Status: true if all files are locked
   const isMasterLocked = files.length > 0 && files.every((f) => f.permission === 'LOCKED');
 
-  // Check if current user is the session creator / host or admin
-  const isCreator = user?.role === 'ADMIN' || Boolean(
+  // Check if current user is the session creator / host
+  const currentUid = user?.id || (user as any)?._id;
+  const isCreator = Boolean(
     session?.interviewerId && (
-      (typeof session.interviewerId === 'string' && session.interviewerId === user?.id) ||
-      ((session.interviewerId as any)?._id === user?.id) ||
-      ((session.interviewerId as any)?.id === user?.id)
+      (typeof session.interviewerId === 'string' && session.interviewerId === currentUid) ||
+      ((session.interviewerId as any)?._id === currentUid) ||
+      ((session.interviewerId as any)?.id === currentUid) ||
+      ((session.interviewerId as any)?.toString?.() === currentUid?.toString?.())
     )
   );
 
   const { theme, themeConfig } = useTheme();
 
-  // Extra Interviewer Tools: Stopwatch & Phased Milestones
+  // Interviewer Tools: Clean Stopwatch
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   const [stopwatchRunning, setStopwatchRunning] = useState(false);
   const [interviewPhase, setInterviewPhase] = useState<number>(1);
@@ -207,7 +209,7 @@ export const InterviewerDashboard: React.FC = () => {
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [leftTab, setLeftTab] = useState<'files' | 'storage' | 'questions'>('files');
-  const [rightTab, setRightTab] = useState<'proctor' | 'media' | 'chat'>('proctor');
+  const [rightTab, setRightTab] = useState<'chat' | 'proctor'>('chat');
   const [showBottomConsole, setShowBottomConsole] = useState(true);
   const [showTimestampDrawer, setShowTimestampDrawer] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState<number>(16);
@@ -749,8 +751,7 @@ ${privateNotes || 'No notes added.'}`;
     if (!sessionId) return;
     try {
       setLeaving(true);
-      await sessionService.leave(sessionId, true);
-      alert('You have left the session. Demo accounts have been removed and database session records reset.');
+      await sessionService.leave(sessionId, isCreator);
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Failed to leave session:', err);
@@ -1401,69 +1402,31 @@ ${privateNotes || 'No notes added.'}`;
             </button>
           </div>
 
-          {/* Master Lock Engine Quick Toggle Pill */}
-          <button
-            onClick={handleToggleMasterLock}
-            disabled={lockLoading}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              isMasterLocked
-                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shadow-xs animate-pulse'
-                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20'
-            }`}
-            title="Click to engage or disengage Master Lock Engine"
-          >
-            {isMasterLocked ? (
-              <>
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-                <span>Lock Engine: ENGAGED</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Lock Engine: Live</span>
-              </>
-            )}
-          </button>
-
-          {/* Live Interview Stopwatch & Phased Milestone Tracker */}
-          <div className="hidden xl:flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-white/10">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-              <Timer className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{formatStopwatch(stopwatchSeconds)}</span>
-              <button
-                onClick={() => setStopwatchRunning(!stopwatchRunning)}
-                className="ml-1 p-0.5 hover:text-indigo-500 cursor-pointer text-slate-400"
-                title={stopwatchRunning ? 'Pause Stopwatch' : 'Start Stopwatch'}
-              >
-                {stopwatchRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
-              </button>
-              <button
-                onClick={() => {
-                  setStopwatchRunning(false);
-                  setStopwatchSeconds(0);
-                }}
-                className="p-0.5 hover:text-rose-500 cursor-pointer text-slate-400"
-                title="Reset Stopwatch"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </button>
-            </div>
-
-            <select
-              value={interviewPhase}
-              onChange={(e) => setInterviewPhase(Number(e.target.value))}
-              className="text-xs font-semibold px-2 py-1 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 cursor-pointer focus:outline-none"
-              title="Current Interview Milestone Phase"
+          {/* Clean Interview Stopwatch */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+            <Timer className="w-3.5 h-3.5 text-indigo-500" />
+            <span>{formatStopwatch(stopwatchSeconds)}</span>
+            <button
+              onClick={() => setStopwatchRunning(!stopwatchRunning)}
+              className="ml-1 p-0.5 hover:text-indigo-500 cursor-pointer text-slate-400"
+              title={stopwatchRunning ? 'Pause Stopwatch' : 'Start Stopwatch'}
             >
-              <option value={1}>Phase 1: Clarification (0-10m)</option>
-              <option value={2}>Phase 2: Algorithm (10-25m)</option>
-              <option value={3}>Phase 3: Coding (25-45m)</option>
-              <option value={4}>Phase 4: Big-O & Testing (45-60m)</option>
-            </select>
+              {stopwatchRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
+            </button>
+            <button
+              onClick={() => {
+                setStopwatchRunning(false);
+                setStopwatchSeconds(0);
+              }}
+              className="p-0.5 hover:text-rose-500 cursor-pointer text-slate-400"
+              title="Reset Stopwatch"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
           </div>
 
           {/* Live Candidate Status Indicator */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300">
             <span
               className={`w-2 h-2 rounded-full ${
                 candidateActivity === 'typing'
@@ -1478,72 +1441,24 @@ ${privateNotes || 'No notes added.'}`;
                 ? 'Candidate Typing...'
                 : candidateActivity === 'running'
                 ? 'Executing Tests...'
-                : 'Candidate Live'}
+                : 'Candidate Online'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Dynamic Layout Preset Selector */}
-          <div className="hidden lg:flex items-center bg-slate-100 dark:bg-white/5 p-0.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300">
-            <button
-              onClick={() => applyLayoutMode('standard')}
-              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
-                layoutMode === 'standard' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Standard 3-Column Layout"
-            >
-              Standard
-            </button>
-            <button
-              onClick={() => applyLayoutMode('focus')}
-              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
-                layoutMode === 'focus' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Focus Code: Fullscreen Editor"
-            >
-              Focus
-            </button>
-            <button
-              onClick={() => applyLayoutMode('split')}
-              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
-                layoutMode === 'split' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Split Code & Files"
-            >
-              Split
-            </button>
-            <button
-              onClick={() => applyLayoutMode('proctor')}
-              className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
-                layoutMode === 'proctor' ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Proctoring & Audit Focus"
-            >
-              Proctor
-            </button>
-          </div>
-
-          {/* Line Timestamp Inspector Button with Suspicious Counter */}
+          {/* Flagged Paste Inspector Pill (Only visible if suspicious activity detected) */}
           {(() => {
             const suspiciousCount = lineHistory.filter((l) => l.isSuspicious).length;
+            if (suspiciousCount === 0) return null;
             return (
               <button
                 onClick={() => setShowTimestampDrawer(true)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-xs ${
-                  suspiciousCount > 0
-                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 ring-2 ring-rose-500/30'
-                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20'
-                }`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-xs bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 ring-2 ring-rose-500/30 animate-pulse"
                 title="Inspect Line-by-Line Millisecond Timestamp History & Burst Pastes"
               >
-                <Clock className={`w-3.5 h-3.5 ${suspiciousCount > 0 ? 'text-rose-500 animate-pulse' : 'text-indigo-500'}`} />
-                <span className="hidden md:inline">Line Timestamps</span>
-                {suspiciousCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-mono animate-bounce">
-                    {suspiciousCount} Flagged
-                  </span>
-                )}
+                <Clock className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden sm:inline">{suspiciousCount} Flagged Pastes</span>
               </button>
             );
           })()}
@@ -1571,7 +1486,7 @@ ${privateNotes || 'No notes added.'}`;
           {/* Theme Selector */}
           <ThemeSelector compact={true} />
 
-          {/* Lifecycle actions */}
+          {/* Lifecycle Actions */}
           {session?.status !== 'ACTIVE' && session?.status !== 'COMPLETED' && (
             <button
               onClick={() => handleSessionAction('start')}
@@ -1582,23 +1497,13 @@ ${privateNotes || 'No notes added.'}`;
             </button>
           )}
 
-          {session?.status === 'ACTIVE' && (
-            <button
-              onClick={() => handleSessionAction('pause')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
-            >
-              <Pause className="w-3 h-3" />
-              <span>Pause</span>
-            </button>
-          )}
-
-          {/* Dedicated End Session Button (Only for session creator) */}
-          {isCreator && (
+          {/* Session Creator: ONLY Creator can End Session */}
+          {isCreator ? (
             session?.status !== 'COMPLETED' ? (
               <button
                 onClick={() => setShowEndSessionConfirm(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-600/25 cursor-pointer"
-                title="Finalize and End Session"
+                title="Finalize and End Session (Host only)"
               >
                 <StopCircle className="w-3.5 h-3.5" />
                 <span>End Session</span>
@@ -1608,17 +1513,17 @@ ${privateNotes || 'No notes added.'}`;
                 Ended
               </span>
             )
+          ) : (
+            /* Joined User: Can only leave, session does not end */
+            <button
+              onClick={() => setShowLeaveConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+              title="Leave Session (Session continues running)"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Leave</span>
+            </button>
           )}
-
-          {/* Leave Session Button */}
-          <button
-            onClick={() => setShowLeaveConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-xl border border-rose-500/25 transition cursor-pointer"
-            title="Leave Session"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Leave</span>
-          </button>
         </div>
       </div>
 
@@ -2531,7 +2436,7 @@ ${privateNotes || 'No notes added.'}`;
           )}
         </div>
 
-        {/* Right Column: Real-Time Audit Feed, Security Alerts & Persistent Live Media */}
+        {/* Right Column: Persistent Face-to-Face Video & Chat / Proctoring */}
         <div
           className={`${
             isRightSidebarOpen ? 'w-80 md:w-92' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
@@ -2539,46 +2444,48 @@ ${privateNotes || 'No notes added.'}`;
             mobileTab === 'media' || mobileTab === 'chat' ? 'fixed inset-0 z-40 w-full md:w-92' : 'hidden lg:flex'
           } border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
         >
-          {/* Right Column Header Tabs */}
+          {/* Right Column Header */}
+          <div className="h-10 px-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setMobileTab('editor')}
+                className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
+                title="Back to Editor"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                Live Video & Audio Feed
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsRightSidebarOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
+              title="Collapse right sidebar"
+            >
+              <PanelRightClose className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Persistent LiveMediaSession Feed (Always visible face-to-face video) */}
+          <div className="p-3 shrink-0 border-b border-slate-200/60 dark:border-white/10">
+            <LiveMediaSession
+              sessionId={sessionId!}
+              currentUserId={user?.id || (user as any)?._id || ''}
+              currentUserName={user?.name || 'Interviewer'}
+              currentUserRole={user?.role || 'INTERVIEWER'}
+              currentUserAvatarUrl={user?.avatarUrl}
+              sendMessage={sendMessage}
+              lastSocketMessage={lastWsMsg}
+              initialParticipants={initialParticipants}
+              isDocked={false}
+            />
+          </div>
+
+          {/* Sub-Tabs: Chat & Proctoring/Security */}
           <div className="flex items-center border-b border-slate-200 bg-slate-100/70 p-1 gap-1 shrink-0">
-            <button
-              onClick={() => setMobileTab('editor')}
-              className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
-              title="Back to Editor"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                setRightTab('proctor');
-                setMobileTab('media');
-              }}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                rightTab === 'proctor'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Proctor</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setRightTab('media');
-                setMobileTab('media');
-              }}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                rightTab === 'media'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Cam/Mic</span>
-            </button>
-
             <button
               onClick={() => {
                 setRightTab('chat');
@@ -2601,35 +2508,22 @@ ${privateNotes || 'No notes added.'}`;
             </button>
 
             <button
-              onClick={() => setIsRightSidebarOpen(false)}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
-              title="Collapse right sidebar"
+              onClick={() => {
+                setRightTab('proctor');
+                setMobileTab('media');
+              }}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                rightTab === 'proctor'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
             >
-              <PanelRightClose className="w-4 h-4" />
+              <Activity className="w-3.5 h-3.5" />
+              <span>Security & Flags</span>
             </button>
           </div>
 
-          {/* Persistent LiveMediaSession Feed (Never unmounts, preserving active voice & WebRTC) */}
-          <div className="p-3 shrink-0">
-            <LiveMediaSession
-              sessionId={sessionId!}
-              currentUserId={user?.id || ''}
-              currentUserName={user?.name || 'Interviewer'}
-              currentUserRole={user?.role || 'INTERVIEWER'}
-              currentUserAvatarUrl={user?.avatarUrl}
-              sendMessage={sendMessage}
-              lastSocketMessage={lastWsMsg}
-              initialParticipants={initialParticipants}
-              isDocked={rightTab !== 'media'}
-              onExpand={() => {
-                setIsRightSidebarOpen(true);
-                setRightTab('media');
-                setMobileTab('media');
-              }}
-            />
-          </div>
-
-            {/* Tab 1: Proctoring, Warnings, Blocking & Live Security Audit */}
+            {/* Tab 2: Proctoring, Warnings, Blocking & Live Security Audit */}
             {rightTab === 'proctor' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Candidates List with Warning & Block Controls */}
@@ -2772,40 +2666,7 @@ ${privateNotes || 'No notes added.'}`;
               </div>
             )}
 
-            {/* Tab 2: Live Media Expanded Info */}
-            {rightTab === 'media' && (
-              <div className="flex-1 p-3 overflow-y-auto space-y-3 custom-scrollbar">
-                <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs space-y-2">
-                  <span className="font-bold text-indigo-900 flex items-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 text-indigo-600" />
-                    Live Interviewer Feed
-                  </span>
-                  <p className="text-[11px] text-indigo-800 leading-snug">
-                    Camera and microphone are streaming directly between you and the candidate. Use the toolbar controls above to mute or toggle your webcam.
-                  </p>
-                </div>
-
-                {/* Questions Quick Overview */}
-                <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
-                    Active Problems ({questions.length})
-                  </span>
-                  {questions.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No questions added yet.</p>
-                  ) : (
-                    questions.map((q) => (
-                      <div key={q.id} className="p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                        <p className="font-bold text-slate-900">{q.title}</p>
-                        <p className="text-[11px] text-slate-500 line-clamp-2">{q.description}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Real-Time In-Session Chat */}
+            {/* Real-Time In-Session Chat */}
             {rightTab === 'chat' && (
               <div className="flex-1 flex flex-col overflow-hidden">
                 <SessionChat
@@ -2828,7 +2689,7 @@ ${privateNotes || 'No notes added.'}`;
             <button
               onClick={() => setIsRightSidebarOpen(true)}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer shadow-2xs"
-              title="Expand right panel (Live Media & Audit Log)"
+              title="Expand right panel"
             >
               <PanelRightOpen className="w-4 h-4" />
             </button>
@@ -2836,12 +2697,12 @@ ${privateNotes || 'No notes added.'}`;
             <button
               onClick={() => {
                 setIsRightSidebarOpen(true);
-                setRightTab('media');
+                setRightTab('chat');
               }}
-              className="relative p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
-              title="Live Media Feed"
+              className="relative p-2 rounded-lg text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+              title="Open Chat"
             >
-              <Radio className="w-4 h-4 animate-pulse" />
+              <MessageSquare className="w-4 h-4" />
             </button>
             <button
               onClick={() => {
@@ -2884,7 +2745,6 @@ ${privateNotes || 'No notes added.'}`;
 
         <button
           onClick={() => {
-            setRightTab('media');
             setIsRightSidebarOpen(true);
             setMobileTab('media');
           }}
@@ -3589,16 +3449,20 @@ ${privateNotes || 'No notes added.'}`;
         />
       )}
 
-      {/* Leave Session Confirmation Modal (with database reset and demo account deletion) */}
+      {/* Leave Session Confirmation Modal */}
       {showLeaveConfirm && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center mb-4">
               <LogOut className="w-6 h-6" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900 mb-1">Leave Session & Reset Database?</h2>
+            <h2 className="text-lg font-bold text-slate-900 mb-1">
+              {isCreator ? 'Leave and End Session?' : 'Leave Session?'}
+            </h2>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-              Are you sure you want to leave this session? Leaving will clean up session files, remove seeded demo accounts (<code className="text-rose-600 font-mono">interviewer@cse.com</code>, <code className="text-rose-600 font-mono">candidate@cse.com</code>, <code className="text-rose-600 font-mono">admin@cse.com</code>), and reset session data.
+              {isCreator
+                ? 'As the creator of this session, leaving will conclude and finalize the session for all participants.'
+                : 'Are you sure you want to leave this session? As you joined this session, leaving will not end it; the session will continue running for other participants.'}
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -3614,10 +3478,12 @@ ${privateNotes || 'No notes added.'}`;
                 type="button"
                 onClick={handleLeaveSession}
                 disabled={leaving}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl transition shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2 ${
+                  isCreator ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20' : 'bg-slate-800 hover:bg-black'
+                }`}
               >
                 {leaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
-                <span>{leaving ? 'Resetting & Leaving...' : 'Yes, Leave & Reset'}</span>
+                <span>{leaving ? 'Leaving...' : isCreator ? 'Yes, End & Leave' : 'Confirm Leave'}</span>
               </button>
             </div>
           </div>

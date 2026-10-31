@@ -616,15 +616,14 @@ export const CandidateDashboard: React.FC = () => {
     }
   };
 
-  // Leave Session & Reset Database handler
+  // Leave Session handler: candidate only leaves; the session does not end, it goes on!
   const handleLeaveSession = async () => {
     if (!sessionId) return;
     try {
       setLeaving(true);
-      await sessionService.leave(sessionId, true);
+      await sessionService.leave(sessionId, false);
       navigate('/dashboard');
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to cleanly exit session.');
       navigate('/dashboard');
     } finally {
       setLeaving(false);
@@ -1412,7 +1411,7 @@ export const CandidateDashboard: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-slate-900 mb-1">Leave Session?</h3>
             <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-              Leaving the session will conclude your interview. The session database will be reset and demo accounts removed.
+              Are you sure you want to leave this session? The interview session will stay active and you can rejoin anytime with your session code.
             </p>
             <div className="flex items-center gap-2">
               <button
