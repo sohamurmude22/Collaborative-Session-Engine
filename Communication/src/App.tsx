@@ -8,7 +8,6 @@ import { Register } from './pages/Register.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { InterviewerDashboard } from './pages/InterviewerDashboard.js';
 import { CandidateDashboard } from './pages/CandidateDashboard.js';
-import { SessionReplay } from './pages/SessionReplay.js';
 import { AdminDashboard } from './pages/AdminDashboard.js';
 
 export function App() {
@@ -31,7 +30,7 @@ export function App() {
               <Route path="sessions/:id/editor" element={<CandidateDashboard />} />
               <Route path="sessions/:id/interviewer" element={<InterviewerDashboard />} />
               <Route path="sessions/:id/activity" element={<InterviewerDashboard />} />
-              <Route path="sessions/:id/replay" element={<SessionReplay />} />
+              <Route path="sessions/:id/replay" element={<Navigate to="/dashboard" replace />} />
             </Route>
 
             {/* System Admin Routes */}

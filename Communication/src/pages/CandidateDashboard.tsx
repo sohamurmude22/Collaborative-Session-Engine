@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import {
@@ -83,6 +83,53 @@ export const CandidateDashboard: React.FC = () => {
   const [leftTab, setLeftTab] = useState<'files' | 'storage' | 'questions'>('files');
   const [rightTab, setRightTab] = useState<'media' | 'chat'>('media');
   const [editorFontSize, setEditorFontSize] = useState<number>(16);
+  const [mobileTab, setMobileTab] = useState<'editor' | 'files' | 'media' | 'chat' | 'output'>('editor');
+
+  // Pre-load participant metadata for zero-latency peer connection & avatar cards
+  const initialParticipants = useMemo(() => {
+    const list: Array<{ userId: string; name: string; role: string; avatarUrl?: string }> = [];
+    if (session?.interviewerId) {
+      const intObj: any = session.interviewerId;
+      const uid = typeof intObj === 'object' ? (intObj._id || intObj.id) : intObj;
+      if (uid) {
+        list.push({
+          userId: String(uid),
+          name: typeof intObj === 'object' ? (intObj.name || 'Interviewer') : 'Interviewer',
+          role: 'INTERVIEWER',
+          avatarUrl: typeof intObj === 'object' ? intObj.avatarUrl : undefined
+        });
+      }
+    }
+    if (session?.candidateId) {
+      const candObj: any = session.candidateId;
+      const uid = typeof candObj === 'object' ? (candObj._id || candObj.id) : candObj;
+      if (uid) {
+        list.push({
+          userId: String(uid),
+          name: typeof candObj === 'object' ? (candObj.name || 'Candidate') : 'Candidate',
+          role: 'CANDIDATE',
+          avatarUrl: typeof candObj === 'object' ? candObj.avatarUrl : undefined
+        });
+      }
+    }
+    if (session?.participants && Array.isArray(session.participants)) {
+      session.participants.forEach((p: any) => {
+        const u = p.userId;
+        if (u) {
+          const uid = typeof u === 'object' ? (u._id || u.id) : u;
+          if (uid) {
+            list.push({
+              userId: String(uid),
+              name: typeof u === 'object' ? (u.name || 'Collaborator') : 'Collaborator',
+              role: p.role || 'CANDIDATE',
+              avatarUrl: typeof u === 'object' ? u.avatarUrl : undefined
+            });
+          }
+        }
+      });
+    }
+    return list;
+  }, [session]);
 
   // Check if current user is session creator (or interviewer/admin)
   const isCreator =
@@ -766,22 +813,34 @@ export const CandidateDashboard: React.FC = () => {
       </div>
 
       {/* Main Workspace Body */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Column: Files / Shared File Storage / Problems */}
-        {showLeftSidebar && (
-          <div className={`w-72 md:w-80 border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col shrink-0 transition-all duration-200`}>
-            {/* Left Column Tabs */}
-            <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex gap-1">
-              <button
-                onClick={() => setLeftTab('files')}
-                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                  leftTab === 'files'
-                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <FileCode className="w-3.5 h-3.5" /> Files ({files.length})
-              </button>
+        <div
+          className={`${
+            showLeftSidebar ? 'w-72 md:w-80' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
+          } ${
+            mobileTab === 'files' ? 'fixed inset-0 z-40 w-full' : 'hidden lg:flex'
+          } border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex-col shrink-0 transition-all duration-200`}
+        >
+          {/* Left Column Tabs */}
+          <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center gap-1">
+            <button
+              onClick={() => setMobileTab('editor')}
+              className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
+              title="Back to Editor"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setLeftTab('files')}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                leftTab === 'files'
+                  ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5" /> Files ({files.length})
+            </button>
 
               <button
                 onClick={() => setLeftTab('storage')}
@@ -864,10 +923,13 @@ export const CandidateDashboard: React.FC = () => {
               </div>
             )}
           </div>
-        )}
 
         {/* Center Column: Monaco Editor & C++ Compiler Output Console */}
-        <div className={`flex-1 flex flex-col ${themeConfig.bgCard} relative overflow-hidden transition-colors duration-200`}>
+        <div
+          className={`flex-1 flex flex-col ${themeConfig.bgCard} relative overflow-hidden transition-colors duration-200 min-w-0 ${
+            mobileTab !== 'editor' && mobileTab !== 'output' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
           {/* Editor Header Toolbar */}
           <div className="h-10 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.02] px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
@@ -1123,128 +1185,222 @@ export const CandidateDashboard: React.FC = () => {
         </div>
 
         {/* Right Column: Live Camera & Microphone Video Feed + In-Session Live Chat */}
-        {showRightSidebar && (
-          <div className={`w-80 md:w-96 border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0 transition-all duration-200`}>
-            {/* Right Tabs: Live Media vs In-Session Chat */}
-            <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex gap-1 shrink-0">
-              <button
-                onClick={() => setRightTab('media')}
-                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                  rightTab === 'media'
-                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <span>Live Feed & Problems</span>
-              </button>
+        <div
+          className={`${
+            showRightSidebar ? 'w-80 md:w-96' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
+          } ${
+            mobileTab === 'media' || mobileTab === 'chat' ? 'fixed inset-0 z-40 w-full md:w-96' : 'hidden lg:flex'
+          } border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
+        >
+          {/* Right Tabs: Live Media vs In-Session Chat */}
+          <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setMobileTab('editor')}
+              className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
+              title="Back to Editor"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-              <button
-                onClick={() => {
-                  setRightTab('chat');
-                  setUnreadChatCount(0);
-                }}
-                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 relative ${
-                  rightTab === 'chat'
-                    ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>Chat</span>
-                {unreadChatCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">
-                    {unreadChatCount}
-                  </span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setRightTab('media');
+                setMobileTab('media');
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                rightTab === 'media'
+                  ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span>Live Feed & Problems</span>
+            </button>
 
-            {/* Right Content Tab 1: Live Video Feed & Questions */}
-            {rightTab === 'media' && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {/* Camera & Microphone Session Feed */}
-                <LiveMediaSession
-                  sessionId={sessionId!}
-                  currentUserId={user?.id || ''}
-                  currentUserName={user?.name || 'Candidate'}
-                  currentUserRole={user?.role || 'CANDIDATE'}
-                  currentUserAvatarUrl={user?.avatarUrl}
-                  sendMessage={sendMessage}
-                  lastSocketMessage={lastWsMsg}
-                />
-
-                {/* Problems & Revealed Hints Section */}
-                <div className="p-4 rounded-2xl bg-white/70 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/10 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/10">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-heading">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      Problems & Hints
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                      {questions.length} Active
-                    </span>
-                  </div>
-
-                  {questions.length === 0 ? (
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 text-xs text-slate-400 text-center">
-                      Questions will appear once revealed by the host.
-                    </div>
-                  ) : (
-                    questions.map((q) => (
-                      <div key={q.id} className="space-y-2 text-xs">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-slate-900 dark:text-white text-sm font-heading">{q.title}</h4>
-                          <span
-                            className={`text-[9px] font-mono font-bold px-2 py-0.2 rounded-full ${
-                              q.difficulty === 'EASY'
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
-                                : q.difficulty === 'HARD'
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
-                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
-                            }`}
-                          >
-                            {q.difficulty || 'MEDIUM'}
-                          </span>
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{q.description}</p>
-
-                        {/* Revealed Hints */}
-                        {q.hints && q.hints.length > 0 && (
-                          <div className="pt-2 border-t border-slate-100 dark:border-white/10 space-y-1.5">
-                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-amber-500" /> Hints ({q.hints.length}):
-                            </span>
-                            {q.hints.map((h) => (
-                              <div key={h.id} className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200">
-                                <p className="font-bold text-[11px] mb-0.5">{h.title}</p>
-                                <p className="text-[11px] leading-snug">{h.content}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Right Content Tab 2: In-Session Live Chat */}
-            {rightTab === 'chat' && (
-              <div className="flex-1 p-2 overflow-hidden">
-                <SessionChat
-                  sessionId={sessionId!}
-                  currentUserId={user?.id || ''}
-                  currentUserName={user?.name || 'Candidate'}
-                  currentUserRole={user?.role || 'CANDIDATE'}
-                  currentUserAvatarUrl={user?.avatarUrl}
-                  messages={chatMessages}
-                  onSendMessage={handleSendChatMessage}
-                />
-              </div>
-            )}
+            <button
+              onClick={() => {
+                setRightTab('chat');
+                setMobileTab('chat');
+                setUnreadChatCount(0);
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 relative ${
+                rightTab === 'chat'
+                  ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-white/10'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+              {unreadChatCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
           </div>
-        )}
+
+          {/* Persistent LiveMediaSession Feed (Never unmounts, preserving active voice & WebRTC) */}
+          <div className="p-3 shrink-0">
+            <LiveMediaSession
+              sessionId={sessionId!}
+              currentUserId={user?.id || ''}
+              currentUserName={user?.name || 'Candidate'}
+              currentUserRole={user?.role || 'CANDIDATE'}
+              currentUserAvatarUrl={user?.avatarUrl}
+              sendMessage={sendMessage}
+              lastSocketMessage={lastWsMsg}
+              initialParticipants={initialParticipants}
+              isDocked={rightTab !== 'media'}
+              onExpand={() => {
+                setShowRightSidebar(true);
+                setRightTab('media');
+                setMobileTab('media');
+              }}
+            />
+          </div>
+
+          {/* Right Content Tab 1: Problems & Revealed Hints */}
+          {rightTab === 'media' && (
+            <div className="flex-1 overflow-y-auto p-3 pt-0 space-y-3 custom-scrollbar">
+              <div className="p-4 rounded-2xl bg-white/70 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/10 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/10">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-heading">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    Problems & Hints
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                    {questions.length} Active
+                  </span>
+                </div>
+
+                {questions.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 text-xs text-slate-400 text-center">
+                    Questions will appear once revealed by the host.
+                  </div>
+                ) : (
+                  questions.map((q) => (
+                    <div key={q.id} className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm font-heading">{q.title}</h4>
+                        <span
+                          className={`text-[9px] font-mono font-bold px-2 py-0.2 rounded-full ${
+                            q.difficulty === 'EASY'
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25'
+                              : q.difficulty === 'HARD'
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                              : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25'
+                          }`}
+                        >
+                          {q.difficulty || 'MEDIUM'}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{q.description}</p>
+
+                      {/* Revealed Hints */}
+                      {q.hints && q.hints.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100 dark:border-white/10 space-y-1.5">
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Hints ({q.hints.length}):
+                          </span>
+                          {q.hints.map((h) => (
+                            <div key={h.id} className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200">
+                              <p className="font-bold text-[11px] mb-0.5">{h.title}</p>
+                              <p className="text-[11px] leading-snug">{h.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Right Content Tab 2: In-Session Live Chat */}
+          {rightTab === 'chat' && (
+            <div className="flex-1 p-2 overflow-hidden flex flex-col">
+              <SessionChat
+                sessionId={sessionId!}
+                currentUserId={user?.id || ''}
+                currentUserName={user?.name || 'Candidate'}
+                currentUserRole={user?.role || 'CANDIDATE'}
+                currentUserAvatarUrl={user?.avatarUrl}
+                messages={chatMessages}
+                onSendMessage={handleSendChatMessage}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile Responsive Navigation Bottom Dock Bar (< 1024px) */}
+      <div className="lg:hidden h-14 border-t border-slate-200/80 dark:border-white/10 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
+        <button
+          onClick={() => setMobileTab('editor')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'editor' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <Code2 className="w-4 h-4" />
+          <span>Editor</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab('files')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'files' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <FileCode className="w-4 h-4" />
+          <span>Files ({files.length})</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setRightTab('media');
+            setShowRightSidebar(true);
+            setMobileTab('media');
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
+            mobileTab === 'media' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Live Call</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setRightTab('chat');
+            setShowRightSidebar(true);
+            setMobileTab('chat');
+            setUnreadChatCount(0);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
+            mobileTab === 'chat' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Chat</span>
+          {unreadChatCount > 0 && (
+            <span className="absolute top-1 right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] flex items-center justify-center font-bold">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setShowBottomConsole(true);
+            setMobileTab('output');
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'output' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span>Output</span>
+        </button>
       </div>
 
       {/* Leave Session Confirmation Modal */}

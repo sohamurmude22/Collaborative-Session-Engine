@@ -341,7 +341,7 @@ export const Dashboard: React.FC = () => {
             <History className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] text-slate-400 font-medium">Archived Replays</p>
+            <p className="text-[11px] text-slate-400 font-medium">Archived Sessions</p>
             <p className="text-xl font-extrabold text-slate-900 dark:text-white font-heading">{completedSessions.length}</p>
           </div>
         </div>
@@ -485,7 +485,7 @@ export const Dashboard: React.FC = () => {
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
               {selectedTab === 'completed'
-                ? 'When an interview session is concluded with End Session, it will be archived here with full replay records.'
+                ? 'When an interview session is concluded with End Session, it will be archived here with all files and records.'
                 : 'Get started by creating a new collaborative workspace or join one using an access code.'}
             </p>
             {selectedTab !== 'completed' && (
@@ -570,23 +570,14 @@ export const Dashboard: React.FC = () => {
 
                     {/* Action buttons based on completed or active */}
                     {isCompleted ? (
-                      <div className="space-y-2 pt-1">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            to={`/sessions/${s.id}/replay`}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-xl border border-indigo-500/20 transition cursor-pointer"
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                            <span>10m Replay</span>
-                          </Link>
-                          <Link
-                            to={targetUrl}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 transition cursor-pointer"
-                          >
-                            <span>Review Code</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </Link>
-                        </div>
+                      <div className="pt-1">
+                        <Link
+                          to={targetUrl}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 transition cursor-pointer"
+                        >
+                          <span>Review Session Code & Files</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 pt-1">

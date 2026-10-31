@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import {
@@ -12,7 +12,6 @@ import { FriendsModal } from '../components/FriendsModal.js';
 import { ThemeSelector } from '../components/ThemeSelector.js';
 import { LiveMediaSession } from '../components/LiveMediaSession.js';
 import { UserAvatar } from '../components/UserAvatar.js';
-import { sessionRecordingService } from '../services/sessionRecording.js';
 import {
   ISession,
   IFile,
@@ -212,6 +211,53 @@ export const InterviewerDashboard: React.FC = () => {
   const [showBottomConsole, setShowBottomConsole] = useState(true);
   const [showTimestampDrawer, setShowTimestampDrawer] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState<number>(16);
+  const [mobileTab, setMobileTab] = useState<'editor' | 'controls' | 'media' | 'chat' | 'output'>('editor');
+
+  // Pre-load participant metadata for zero-latency peer connection & avatar cards
+  const initialParticipants = useMemo(() => {
+    const list: Array<{ userId: string; name: string; role: string; avatarUrl?: string }> = [];
+    if (session?.interviewerId) {
+      const intObj: any = session.interviewerId;
+      const uid = typeof intObj === 'object' ? (intObj._id || intObj.id) : intObj;
+      if (uid) {
+        list.push({
+          userId: String(uid),
+          name: typeof intObj === 'object' ? (intObj.name || 'Interviewer') : 'Interviewer',
+          role: 'INTERVIEWER',
+          avatarUrl: typeof intObj === 'object' ? intObj.avatarUrl : undefined
+        });
+      }
+    }
+    if (session?.candidateId) {
+      const candObj: any = session.candidateId;
+      const uid = typeof candObj === 'object' ? (candObj._id || candObj.id) : candObj;
+      if (uid) {
+        list.push({
+          userId: String(uid),
+          name: typeof candObj === 'object' ? (candObj.name || 'Candidate') : 'Candidate',
+          role: 'CANDIDATE',
+          avatarUrl: typeof candObj === 'object' ? candObj.avatarUrl : undefined
+        });
+      }
+    }
+    if (session?.participants && Array.isArray(session.participants)) {
+      session.participants.forEach((p: any) => {
+        const u = p.userId;
+        if (u) {
+          const uid = typeof u === 'object' ? (u._id || u.id) : u;
+          if (uid) {
+            list.push({
+              userId: String(uid),
+              name: typeof u === 'object' ? (u.name || 'Collaborator') : 'Collaborator',
+              role: p.role || 'CANDIDATE',
+              avatarUrl: typeof u === 'object' ? u.avatarUrl : undefined
+            });
+          }
+        }
+      });
+    }
+    return list;
+  }, [session]);
 
   // Line Timestamp History & Millisecond Anti-Cheat States
   const [lineHistory, setLineHistory] = useState<LineTimestampRecord[]>([]);
@@ -1115,8 +1161,6 @@ ${privateNotes || 'No notes added.'}`;
     if (!sessionId) return;
     try {
       setEndingSession(true);
-      // Auto-save past 10-minute screen recording for replay
-      await sessionRecordingService.stopRecordingAndSave(sessionId, user?.name || 'Interviewer');
       await sessionService.end(sessionId);
       await fetchSessionDetails();
       setShowEndSessionConfirm(false);
@@ -1243,13 +1287,12 @@ ${privateNotes || 'No notes added.'}`;
             <span className="font-semibold text-amber-300">Session Completed & Archived:</span>
             <span className="text-slate-300">This session has been finalized. Code and activity timeline are preserved.</span>
           </div>
-          <Link
-            to={`/sessions/${sessionId}/replay`}
-            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs flex items-center gap-1.5 transition"
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
           >
-            <History className="w-3.5 h-3.5" />
-            <span>Open Session Replay</span>
-          </Link>
+            <span>Return to Dashboard</span>
+          </button>
         </div>
       )}
 
@@ -1576,36 +1619,42 @@ ${privateNotes || 'No notes added.'}`;
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Leave</span>
           </button>
-
-          <Link
-            to={`/sessions/${sessionId}/replay`}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-white/10 shadow-xs transition"
-          >
-            <History className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="hidden md:inline">Replay</span>
-          </Link>
         </div>
       </div>
 
       {/* Main 3-Column Working Interface */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left Column: Lock Permission Engine, File Matrix & Progressive Reveal Controls */}
-        {isLeftSidebarOpen ? (
-          <div className={`w-80 xl:w-88 border-r ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-y-auto shrink-0 shadow-xs transition-all duration-200`}>
-            {/* Header with collapse button */}
-            <div className="h-10 px-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
+        <div
+          className={`${
+            isLeftSidebarOpen ? 'w-80 xl:w-88' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
+          } ${
+            mobileTab === 'controls' ? 'fixed inset-0 z-40 w-full' : 'hidden lg:flex'
+          } border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col overflow-y-auto shrink-0 shadow-xs transition-all duration-200`}
+        >
+          {/* Header with collapse button */}
+          <div className="h-10 px-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setMobileTab('editor')}
+                className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
+                title="Back to Editor"
+              >
+                <X className="w-4 h-4" />
+              </button>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-600" />
                 Control Center
               </span>
-              <button
-                onClick={() => setIsLeftSidebarOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
-                title="Collapse left panel to expand editor"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
             </div>
+            <button
+              onClick={() => setIsLeftSidebarOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
+              title="Collapse left panel to expand editor"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          </div>
 
             {/* Left Column Tabs: Files | Storage | Tasks */}
             <div className="flex items-center border-b border-slate-200 bg-slate-100/70 p-1 gap-1 shrink-0">
@@ -2029,8 +2078,10 @@ ${privateNotes || 'No notes added.'}`;
           </div>
         )}
       </div>
-      ) : (
-          <div className={`w-12 border-r ${themeConfig.border} ${themeConfig.bgCard} flex flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
+
+        {/* Collapsed Left Sidebar Rail (Desktop only) */}
+        {!isLeftSidebarOpen && (
+          <div className={`hidden lg:flex w-12 border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
             <button
               onClick={() => setIsLeftSidebarOpen(true)}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer shadow-2xs"
@@ -2072,7 +2123,11 @@ ${privateNotes || 'No notes added.'}`;
         )}
 
         {/* Center Column: Live Collaborative Monaco Editor */}
-        <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+        <div
+          className={`flex-1 flex flex-col bg-white overflow-hidden min-w-0 ${
+            mobileTab !== 'editor' && mobileTab !== 'output' ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
           {/* Row 1: VS Code-Style Horizontal File Tab Bar */}
           <div className="h-10 border-b border-slate-200 bg-slate-100/80 px-2 flex items-center justify-between shrink-0 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1 min-w-0">
@@ -2476,63 +2531,103 @@ ${privateNotes || 'No notes added.'}`;
           )}
         </div>
 
-        {/* Right Column: Real-Time Audit Feed & Security Alerts */}
-        {isRightSidebarOpen ? (
-          <div className={`w-80 md:w-92 border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-hidden shrink-0 transition-all duration-200`}>
-            {/* Right Column Header Tabs */}
-            <div className="flex items-center border-b border-slate-200 bg-slate-100/70 p-1 gap-1 shrink-0">
-              <button
-                onClick={() => setRightTab('proctor')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  rightTab === 'proctor'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>Proctor</span>
-              </button>
+        {/* Right Column: Real-Time Audit Feed, Security Alerts & Persistent Live Media */}
+        <div
+          className={`${
+            isRightSidebarOpen ? 'w-80 md:w-92' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
+          } ${
+            mobileTab === 'media' || mobileTab === 'chat' ? 'fixed inset-0 z-40 w-full md:w-92' : 'hidden lg:flex'
+          } border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
+        >
+          {/* Right Column Header Tabs */}
+          <div className="flex items-center border-b border-slate-200 bg-slate-100/70 p-1 gap-1 shrink-0">
+            <button
+              onClick={() => setMobileTab('editor')}
+              className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
+              title="Back to Editor"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-              <button
-                onClick={() => setRightTab('media')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  rightTab === 'media'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                }`}
-              >
-                <Radio className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Cam/Mic</span>
-              </button>
+            <button
+              onClick={() => {
+                setRightTab('proctor');
+                setMobileTab('media');
+              }}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                rightTab === 'proctor'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Proctor</span>
+            </button>
 
-              <button
-                onClick={() => {
-                  setRightTab('chat');
-                  setUnreadChatCount(0);
-                }}
-                className={`relative flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  rightTab === 'chat'
-                    ? 'bg-white text-indigo-700 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Chat</span>
-                {unreadChatCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
-                    {unreadChatCount}
-                  </span>
-                )}
-              </button>
+            <button
+              onClick={() => {
+                setRightTab('media');
+                setMobileTab('media');
+              }}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                rightTab === 'media'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Cam/Mic</span>
+            </button>
 
-              <button
-                onClick={() => setIsRightSidebarOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
-                title="Collapse right sidebar"
-              >
-                <PanelRightClose className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setRightTab('chat');
+                setMobileTab('chat');
+                setUnreadChatCount(0);
+              }}
+              className={`relative flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                rightTab === 'chat'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Chat</span>
+              {unreadChatCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setIsRightSidebarOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition cursor-pointer"
+              title="Collapse right sidebar"
+            >
+              <PanelRightClose className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Persistent LiveMediaSession Feed (Never unmounts, preserving active voice & WebRTC) */}
+          <div className="p-3 shrink-0">
+            <LiveMediaSession
+              sessionId={sessionId!}
+              currentUserId={user?.id || ''}
+              currentUserName={user?.name || 'Interviewer'}
+              currentUserRole={user?.role || 'INTERVIEWER'}
+              currentUserAvatarUrl={user?.avatarUrl}
+              sendMessage={sendMessage}
+              lastSocketMessage={lastWsMsg}
+              initialParticipants={initialParticipants}
+              isDocked={rightTab !== 'media'}
+              onExpand={() => {
+                setIsRightSidebarOpen(true);
+                setRightTab('media');
+                setMobileTab('media');
+              }}
+            />
+          </div>
 
             {/* Tab 1: Proctoring, Warnings, Blocking & Live Security Audit */}
             {rightTab === 'proctor' && (
@@ -2677,18 +2772,36 @@ ${privateNotes || 'No notes added.'}`;
               </div>
             )}
 
-            {/* Tab 2: Live Media Cam & Mic */}
+            {/* Tab 2: Live Media Expanded Info */}
             {rightTab === 'media' && (
-              <div className="flex-1 p-3 overflow-y-auto">
-                <LiveMediaSession
-                  sessionId={sessionId!}
-                  currentUserId={user?.id || ''}
-                  currentUserName={user?.name || 'Interviewer'}
-                  currentUserRole={user?.role || 'INTERVIEWER'}
-                  currentUserAvatarUrl={user?.avatarUrl}
-                  sendMessage={sendMessage}
-                  lastSocketMessage={lastWsMsg}
-                />
+              <div className="flex-1 p-3 overflow-y-auto space-y-3 custom-scrollbar">
+                <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs space-y-2">
+                  <span className="font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-indigo-600" />
+                    Live Interviewer Feed
+                  </span>
+                  <p className="text-[11px] text-indigo-800 leading-snug">
+                    Camera and microphone are streaming directly between you and the candidate. Use the toolbar controls above to mute or toggle your webcam.
+                  </p>
+                </div>
+
+                {/* Questions Quick Overview */}
+                <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+                    Active Problems ({questions.length})
+                  </span>
+                  {questions.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No questions added yet.</p>
+                  ) : (
+                    questions.map((q) => (
+                      <div key={q.id} className="p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                        <p className="font-bold text-slate-900">{q.title}</p>
+                        <p className="text-[11px] text-slate-500 line-clamp-2">{q.description}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
 
@@ -2708,8 +2821,10 @@ ${privateNotes || 'No notes added.'}`;
               </div>
             )}
           </div>
-        ) : (
-          <div className={`w-12 border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
+
+        {/* Collapsed Right Sidebar Rail (Desktop only) */}
+        {!isRightSidebarOpen && (
+          <div className={`hidden lg:flex w-12 border-l ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
             <button
               onClick={() => setIsRightSidebarOpen(true)}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer shadow-2xs"
@@ -2719,14 +2834,20 @@ ${privateNotes || 'No notes added.'}`;
             </button>
             <div className="w-6 h-[1px] bg-slate-200" />
             <button
-              onClick={() => setIsRightSidebarOpen(true)}
+              onClick={() => {
+                setIsRightSidebarOpen(true);
+                setRightTab('media');
+              }}
               className="relative p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
               title="Live Media Feed"
             >
               <Radio className="w-4 h-4 animate-pulse" />
             </button>
             <button
-              onClick={() => setIsRightSidebarOpen(true)}
+              onClick={() => {
+                setIsRightSidebarOpen(true);
+                setRightTab('proctor');
+              }}
               className="relative p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 transition cursor-pointer"
               title={`Audit Events (${auditLogs.length})`}
             >
@@ -2737,6 +2858,76 @@ ${privateNotes || 'No notes added.'}`;
             </button>
           </div>
         )}
+      </div>
+
+      {/* Mobile Responsive Navigation Bottom Dock Bar (< 1024px) */}
+      <div className="lg:hidden h-14 border-t border-slate-200 bg-white px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
+        <button
+          onClick={() => setMobileTab('editor')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'editor' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
+          }`}
+        >
+          <Code2 className="w-4 h-4" />
+          <span>Editor</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab('controls')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'controls' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Controls</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setRightTab('media');
+            setIsRightSidebarOpen(true);
+            setMobileTab('media');
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
+            mobileTab === 'media' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-emerald-600" />
+          <span>Live Call</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setRightTab('chat');
+            setIsRightSidebarOpen(true);
+            setMobileTab('chat');
+            setUnreadChatCount(0);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
+            mobileTab === 'chat' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Chat</span>
+          {unreadChatCount > 0 && (
+            <span className="absolute top-1 right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] flex items-center justify-center font-bold">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setShowBottomConsole(true);
+            setMobileTab('output');
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
+            mobileTab === 'output' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span>Output</span>
+        </button>
       </div>
 
       {/* Confirmation Modal: End Session */}
@@ -2783,20 +2974,13 @@ ${privateNotes || 'No notes added.'}`;
             </div>
             <h2 className="text-lg font-bold text-slate-900 mb-1">Session Finalized!</h2>
             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              This session and the past 10-minute screen recording have been recorded and saved. You can review the synchronized video replay, webcam feed, and keystroke timeline anytime.
+              This session has been finalized. All code files, execution outputs, and collaborator activity logs are preserved in your workspace.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
-              <Link
-                to={`/sessions/${sessionId}/replay`}
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition"
-              >
-                <History className="w-4 h-4" />
-                <span>Watch 10-Min Screen Video & Replay</span>
-              </Link>
+            <div className="flex items-center gap-3 justify-center">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"
+                className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition cursor-pointer"
               >
                 Return to Dashboard
               </button>

@@ -224,10 +224,10 @@ export const Home: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <h3 className="font-bold text-lg text-slate-900 dark:text-white font-heading">
-                Granular Audit Replay
+                Granular Audit & Timeline
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Every keystroke, permission change, and file reveal is logged to an immutable audit timeline, replayable at any speed with video synchronization.
+                Every keystroke, execution result, permission change, and file reveal is logged to an immutable audit timeline for comprehensive evaluation.
               </p>
             </div>
           </div>
