@@ -29,6 +29,7 @@ import {
   Search
 } from 'lucide-react';
 import { FriendsModal } from '../components/FriendsModal.js';
+import { CSELogo } from '../components/CSELogo.js';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -282,7 +283,8 @@ export const Dashboard: React.FC = () => {
       {/* Header bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80 dark:border-white/10">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <CSELogo size="sm" withText={false} animated={true} />
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-heading tracking-tight">
               Developer Workspaces
             </h1>

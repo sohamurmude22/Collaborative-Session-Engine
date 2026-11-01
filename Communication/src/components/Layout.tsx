@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Navbar } from './Navbar.js';
 import { Terminal, ShieldCheck, Cpu } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
+import { CSELogo } from './CSELogo.js';
 
 export const Layout: React.FC = () => {
   const { themeConfig, isDark } = useTheme();
@@ -20,9 +21,7 @@ export const Layout: React.FC = () => {
       <footer className="border-t border-slate-200 dark:border-white/10 bg-white/60 dark:bg-[#090d16]/80 backdrop-blur-md py-4 text-xs text-slate-500 dark:text-slate-400 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-md bg-indigo-600/10 dark:bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-              <Terminal className="w-3 h-3" />
-            </div>
+            <CSELogo size="xs" withText={false} animated={false} />
             <span className="font-semibold text-slate-800 dark:text-slate-200 tracking-tight">CSE Platform</span>
             <span className="text-slate-300 dark:text-slate-700">&middot;</span>
             <span className="text-slate-500 dark:text-slate-400 text-[11px]">Real-Time Collaborative Proctoring & Session Engine</span>

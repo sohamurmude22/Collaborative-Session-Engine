@@ -19,6 +19,7 @@ import { FriendsModal } from './FriendsModal.js';
 import { ThemeSelector } from './ThemeSelector.js';
 import { UserAvatar } from './UserAvatar.js';
 import { ProfileModal } from './ProfileModal.js';
+import { CSELogo } from './CSELogo.js';
 
 export const Navbar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -59,21 +60,14 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 group-hover:shadow-indigo-500/40 transition-all duration-300">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-lg font-heading tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                CSE
-                <span className="text-[10px] font-mono uppercase font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30">
-                  STUDIO
-                </span>
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 tracking-wide font-sans hidden sm:block">
-                Collaborative Session Engine
-              </span>
-            </div>
+          <Link to="/" className="flex items-center group cursor-pointer" title="CSE Studio Home">
+            <CSELogo
+              size="md"
+              withText={true}
+              badgeText="STUDIO"
+              subtitle="Collaborative Session Engine"
+              animated={true}
+            />
           </Link>
 
           {/* Desktop Navigation */}

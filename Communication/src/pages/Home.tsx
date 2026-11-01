@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/index.js';
+import { CSELogo } from '../components/CSELogo.js';
 
 export const Home: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -26,9 +27,22 @@ export const Home: React.FC = () => {
   return (
     <div className="space-y-24 max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-200">
       {/* Hero Section */}
-      <div className="relative pt-8 pb-12 text-center space-y-8">
+      <div className="relative pt-6 pb-12 text-center space-y-7">
         {/* Ambient Glow Orb */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-indigo-500/20 via-violet-500/15 to-cyan-500/15 blur-3xl rounded-full pointer-events-none -z-10" />
+
+        {/* Hero CSE Brand Emblem */}
+        <div className="flex justify-center mb-1">
+          <div className="p-3 rounded-3xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/80 dark:border-white/10 backdrop-blur-xl shadow-xl shadow-indigo-500/10 hover:shadow-indigo-500/20 transition-all duration-300 group">
+            <CSELogo
+              size="xl"
+              withText={true}
+              badgeText="STUDIO"
+              subtitle="High-Performance Real-Time Engine"
+              animated={true}
+            />
+          </div>
+        </div>
 
         {/* Shimmer Pill Badge */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 dark:bg-white/5 border border-indigo-500/30 dark:border-white/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold shadow-xs backdrop-blur-md">

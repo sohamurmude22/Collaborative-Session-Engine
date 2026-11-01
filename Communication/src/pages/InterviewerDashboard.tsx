@@ -12,6 +12,7 @@ import { FriendsModal } from '../components/FriendsModal.js';
 import { ThemeSelector } from '../components/ThemeSelector.js';
 import { LiveMediaSession } from '../components/LiveMediaSession.js';
 import { UserAvatar } from '../components/UserAvatar.js';
+import { CSELogo } from '../components/CSELogo.js';
 import {
   ISession,
   IFile,
@@ -1382,6 +1383,10 @@ ${privateNotes || 'No notes added.'}`;
       {/* Top Session Control Ribbon */}
       <div className={`h-14 border-b border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-[#090d16]/85 backdrop-blur-xl px-4 flex items-center justify-between shadow-xs z-20 transition-colors duration-200`}>
         <div className="flex items-center gap-3 md:gap-4">
+          <Link to="/dashboard" title="Return to Dashboard" className="hover:opacity-80 transition cursor-pointer shrink-0">
+            <CSELogo size="xs" withText={false} animated={true} />
+          </Link>
+
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
             <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate max-w-xs md:max-w-md font-heading">

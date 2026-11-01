@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/index.js';
 import { Terminal, Lock, Mail, ArrowRight, Sparkles, Shield, User } from 'lucide-react';
+import { CSELogo } from '../components/CSELogo.js';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -37,10 +38,8 @@ export const Login: React.FC = () => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-to-tr from-indigo-500/15 via-violet-500/10 to-transparent blur-3xl rounded-full pointer-events-none -z-10" />
 
       <div className="w-full max-w-md glass-card p-8 shadow-2xl relative linear-highlight backdrop-blur-xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-indigo-600/25">
-            <Terminal className="w-5 h-5" />
-          </div>
+        <div className="flex items-center gap-3.5 mb-6">
+          <CSELogo size="lg" animated={true} />
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight font-heading">
               Welcome back to CSE

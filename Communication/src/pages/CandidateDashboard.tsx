@@ -60,6 +60,7 @@ import { LiveMediaSession } from '../components/LiveMediaSession.js';
 import { SessionFileStorage } from '../components/SessionFileStorage.js';
 import { SessionChat, ChatMessage } from '../components/SessionChat.js';
 import { LineTimestampRecord } from '../components/LineTimestampDrawer.js';
+import { CSELogo } from '../components/CSELogo.js';
 
 export const CandidateDashboard: React.FC = () => {
   const { id: sessionId } = useParams<{ id: string }>();
@@ -744,6 +745,10 @@ export const CandidateDashboard: React.FC = () => {
       {/* Top Session Ribbon */}
       <div className={`h-14 border-b border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-[#090d16]/85 backdrop-blur-xl px-4 flex items-center justify-between shadow-xs transition-colors duration-200 shrink-0`}>
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
+          <Link to="/dashboard" title="Return to Dashboard" className="hover:opacity-80 transition cursor-pointer shrink-0">
+            <CSELogo size="xs" withText={false} animated={true} />
+          </Link>
+
           <div className="flex items-center gap-2 min-w-0">
             <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${themeConfig.accent} shadow-[0_0_8px_rgba(99,102,241,0.5)]`} />
             <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate max-w-xs md:max-w-sm font-heading">
