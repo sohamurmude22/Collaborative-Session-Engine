@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import crypto from 'crypto';
+import { AccessToken } from 'livekit-server-sdk';
 import { Session, ISessionModel } from '../models/Session.js';
 import { User, IUserModel } from '../models/User.js';
 import { File } from '../models/File.js';
@@ -998,6 +999,66 @@ export const resetSystemDatabase = async (_req: AuthRequest, res: Response): Pro
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+};
+
+export const getLiveKitToken = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required.' }
+      });
+      return;
+    }
+
+    const sessionId = req.params.sessionId || req.params.id;
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Session not found.' }
+      });
+      return;
+    }
+
+    const apiKey = process.env.LIVEKIT_API_KEY || 'devkey';
+    const apiSecret = process.env.LIVEKIT_API_SECRET || 'secret';
+    const wsUrl = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
+
+    const at = new AccessToken(apiKey, apiSecret, {
+      identity: user._id.toString(),
+      name: user.name || 'User',
+      metadata: JSON.stringify({
+        role: user.role,
+        avatarUrl: user.avatarUrl || ''
+      })
+    });
+
+    at.addGrant({
+      roomJoin: true,
+      room: session._id.toString(),
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true
+    });
+
+    const token = await at.toJwt();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token,
+        wsUrl,
+        room: session._id.toString()
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message }
+    });
   }
 };
 

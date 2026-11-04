@@ -17,7 +17,8 @@ import {
   unblockUser,
   lockScreen,
   unlockScreen,
-  resetSystemDatabase
+  resetSystemDatabase,
+  getLiveKitToken
 } from '../controllers/session.controller.js';
 import {
   getFiles,
@@ -45,6 +46,7 @@ router.get('/users/list', getUsersList);
 router.post('/reset-system-database', resetSystemDatabase);
 router.get('/code/:code', getSessionByCode);
 router.get('/:id', getSessionById);
+router.get('/:sessionId/livekit-token', getLiveKitToken);
 router.delete('/:id', deleteSession);
 router.post('/:id/participants', addParticipant);
 

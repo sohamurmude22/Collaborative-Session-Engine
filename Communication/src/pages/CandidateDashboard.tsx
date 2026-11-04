@@ -1228,7 +1228,7 @@ export const CandidateDashboard: React.FC = () => {
               </button>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                Live Voice Call
+                Live Video & Voice Call
               </span>
             </div>
 

@@ -2461,7 +2461,7 @@ ${privateNotes || 'No notes added.'}`;
               </button>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                Live Voice Session
+                Live Video & Voice Call
               </span>
             </div>
 

@@ -152,6 +152,11 @@ export const sessionService = {
     return res.data.data || [];
   },
 
+  async getLiveKitToken(sessionId: string): Promise<{ token: string; wsUrl: string; room: string }> {
+    const res = await apiClient.get<ApiResponse<{ token: string; wsUrl: string; room: string }>>(`/sessions/${sessionId}/livekit-token`);
+    return res.data.data!;
+  },
+
   async executeCode(
     sessionId: string,
     payload: { fileId?: string; code?: string; language?: string; stdinInput?: string }
