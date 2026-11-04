@@ -1228,7 +1228,7 @@ export const CandidateDashboard: React.FC = () => {
               </button>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                Live Video Call
+                Live Voice Call
               </span>
             </div>
 
@@ -1241,7 +1241,7 @@ export const CandidateDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Persistent LiveMediaSession Feed (Always visible face-to-face video) */}
+          {/* Persistent LiveMediaSession Feed (Audio/Mic voice session) */}
           <div className="p-3 shrink-0 border-b border-slate-200/80 dark:border-white/10">
             <LiveMediaSession
               sessionId={sessionId!}

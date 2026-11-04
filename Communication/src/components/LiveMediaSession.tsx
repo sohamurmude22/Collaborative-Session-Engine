@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mic,
   MicOff,
-  Video,
-  VideoOff,
   Minimize2,
   Maximize2,
   Volume2,
@@ -11,8 +9,8 @@ import {
   AlertTriangle,
   Headphones,
   Signal,
-  ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Radio
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
 import { UserAvatar } from './UserAvatar.js';
@@ -44,7 +42,6 @@ interface PeerMediaState {
   userRole: string;
   avatarUrl?: string;
   isMicOn: boolean;
-  isCamOn: boolean;
   isSpeaking: boolean;
   stream?: MediaStream;
 }
@@ -75,18 +72,16 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 }) => {
   const { themeConfig } = useTheme();
 
-  // Local Media State
+  // Local Voice State
   const [isMicOn, setIsMicOn] = useState(false);
-  const [isCamOn, setIsCamOn] = useState(false);
-  const [isNoiseCancellationOn, setIsNoiseCancellationOn] = useState(true);
   const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected'>('idle');
-  const [isSyncingCam, setIsSyncingCam] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
-  // Remote Peer State
+  // Remote Peers State
   const [peers, setPeers] = useState<Record<string, PeerMediaState>>(() => {
     const initial: Record<string, PeerMediaState> = {};
     if (initialParticipants && initialParticipants.length > 0) {
@@ -98,7 +93,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             userRole: p.role || 'CANDIDATE',
             avatarUrl: p.avatarUrl,
             isMicOn: false,
-            isCamOn: false,
             isSpeaking: false
           };
         }
@@ -107,29 +101,22 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     return initial;
   });
 
-  // DOM and Audio Pipeline Refs
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  // Audio Pipeline & WebRTC Refs
   const remoteAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
-
-  // Media & WebRTC Refs
   const localRawAudioStreamRef = useRef<MediaStream | null>(null);
-  const localVideoStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
   const remoteStreamsRef = useRef<Record<string, MediaStream>>({});
   const pendingCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const makingOfferRef = useRef<Record<string, boolean>>({});
 
-  // Web Audio Analyser for local speech detection (visual only - does not mute audio stream)
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const micAnimFrameRef = useRef<number | null>(null);
+  // Local Speech Level Analyser (visual only - never muting)
+  const localAudioCtxRef = useRef<AudioContext | null>(null);
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const localAnimFrameRef = useRef<number | null>(null);
 
   // State mirror refs for event callbacks
   const isMicOnRef = useRef(isMicOn);
   isMicOnRef.current = isMicOn;
-  const isCamOnRef = useRef(isCamOn);
-  isCamOnRef.current = isCamOn;
   const isLocalSpeakingRef = useRef(isLocalSpeaking);
   isLocalSpeakingRef.current = isLocalSpeaking;
   const peersRef = useRef(peers);
@@ -141,11 +128,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       Object.values(remoteAudioRefs.current).forEach((el) => {
         if (el && el.srcObject) {
           el.muted = false;
-          el.play().catch(() => {});
-        }
-      });
-      Object.values(remoteVideoRefs.current).forEach((el) => {
-        if (el && el.srcObject) {
           el.play().catch(() => {});
         }
       });
@@ -162,30 +144,11 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     };
   }, []);
 
-  // Sync active local video stream to local element whenever isCamOn or localVideoRef changes
-  useEffect(() => {
-    if (isCamOn && localVideoStreamRef.current && localVideoRef.current) {
-      if (localVideoRef.current.srcObject !== localVideoStreamRef.current) {
-        localVideoRef.current.srcObject = localVideoStreamRef.current;
-      }
-      localVideoRef.current.play().catch(() => {});
-    }
-  }, [isCamOn]);
-
-  // Sync remote streams to remote video and audio elements on peers state change
+  // Sync remote streams to audio elements on peers state change
   useEffect(() => {
     Object.entries(peers).forEach(([peerId, peer]) => {
       const stream = peer.stream || remoteStreamsRef.current[peerId];
       if (stream) {
-        const videoEl = remoteVideoRefs.current[peerId];
-        if (videoEl) {
-          if (videoEl.srcObject !== stream) {
-            videoEl.srcObject = stream;
-          }
-          if (peer.isCamOn) {
-            videoEl.play().catch(() => {});
-          }
-        }
         const audioEl = remoteAudioRefs.current[peerId];
         if (audioEl) {
           if (audioEl.srcObject !== stream) {
@@ -199,14 +162,14 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     });
   }, [peers]);
 
-  // Set up speech detection using AnalyserNode (only for UI visual meter, never muting audio)
+  // Setup local visual speech detector
   const setupSpeechDetector = useCallback((stream: MediaStream) => {
     cleanupSpeechDetector();
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
+      localAudioCtxRef.current = ctx;
       if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
@@ -215,15 +178,15 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
-      analyserRef.current = analyser;
+      localAnalyserRef.current = analyser;
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       let speakingFrames = 0;
 
       const checkVolume = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
+        if (!localAnalyserRef.current) return;
+        localAnalyserRef.current.getByteFrequencyData(dataArray);
 
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) {
@@ -231,7 +194,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         }
         const avg = sum / bufferLength;
 
-        // Threshold: voice is typically > 10, ambient floor is 2-6
+        // Sensitivity threshold: human speech is typically avg > 10
         const isAboveFloor = avg > 10;
         if (isAboveFloor && isMicOnRef.current) {
           speakingFrames = Math.min(speakingFrames + 1, 8);
@@ -244,38 +207,37 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           if (prev !== currentlySpeaking) {
             sendMessage('MEDIA_STATUS_UPDATE', {
               isMicOn: isMicOnRef.current,
-              isCamOn: isCamOnRef.current,
               isSpeaking: currentlySpeaking
             });
           }
           return currentlySpeaking;
         });
 
-        micAnimFrameRef.current = requestAnimationFrame(checkVolume);
+        localAnimFrameRef.current = requestAnimationFrame(checkVolume);
       };
 
-      micAnimFrameRef.current = requestAnimationFrame(checkVolume);
+      localAnimFrameRef.current = requestAnimationFrame(checkVolume);
     } catch (err) {
       console.warn('[LiveMedia] Speech detector init error:', err);
     }
   }, [sendMessage]);
 
   const cleanupSpeechDetector = () => {
-    if (micAnimFrameRef.current) {
-      cancelAnimationFrame(micAnimFrameRef.current);
-      micAnimFrameRef.current = null;
+    if (localAnimFrameRef.current) {
+      cancelAnimationFrame(localAnimFrameRef.current);
+      localAnimFrameRef.current = null;
     }
-    if (audioContextRef.current) {
+    if (localAudioCtxRef.current) {
       try {
-        audioContextRef.current.close();
+        localAudioCtxRef.current.close();
       } catch {}
-      audioContextRef.current = null;
+      localAudioCtxRef.current = null;
     }
-    analyserRef.current = null;
+    localAnalyserRef.current = null;
     setIsLocalSpeaking(false);
   };
 
-  // Speaker Test Chime: verifies that user's speakers/headphones are functioning properly
+  // Test Speaker Chime: verifies that user's speakers/headphones are functioning properly
   const playSpeakerTestChime = () => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -320,7 +282,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     return remoteStreamsRef.current[peerId];
   }, []);
 
-  // Create or retrieve Peer Connection for a peer
+  // Create or retrieve Peer Connection for a peer (Audio-only)
   const getOrCreatePeerConnection = useCallback(
     (peerId: string): RTCPeerConnection => {
       if (peerConnectionsRef.current[peerId]) {
@@ -331,34 +293,21 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       }
 
       const pc = new RTCPeerConnection(RTC_CONFIG);
-
-      // Ensure persistent remote stream object exists for this peer
       const remoteStream = getOrCreateRemoteStream(peerId);
 
-      // Attach existing local tracks to the peer connection
+      // Attach existing local audio track if mic is on
       if (localRawAudioStreamRef.current) {
         const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
         if (aTrack) {
           pc.addTrack(aTrack, localRawAudioStreamRef.current);
         }
       }
-      if (localVideoStreamRef.current) {
-        const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
-        if (vTrack) {
-          pc.addTrack(vTrack, localVideoStreamRef.current);
-        }
-      }
 
-      // Pre-reserve audio & video transceivers if tracks are not attached yet
+      // Pre-reserve audio transceiver if not present
       const transceivers = pc.getTransceivers();
       if (!transceivers.some((t) => t.receiver.track.kind === 'audio')) {
         try {
           pc.addTransceiver('audio', { direction: 'sendrecv' });
-        } catch {}
-      }
-      if (!transceivers.some((t) => t.receiver.track.kind === 'video')) {
-        try {
-          pc.addTransceiver('video', { direction: 'sendrecv' });
         } catch {}
       }
 
@@ -383,33 +332,24 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         }
       };
 
-      // Remote Track handler: binds tracks directly into the peer's persistent MediaStream
+      // Remote Track handler: binds audio track directly to the peer's persistent MediaStream
       pc.ontrack = (event) => {
+        if (event.track.kind !== 'audio') return;
         const stream = remoteStream;
         const newTrack = event.track;
 
-        // Clean up any stale track of the same kind
-        stream.getTracks().forEach((existingTrack) => {
-          if (existingTrack.kind === newTrack.kind && existingTrack.id !== newTrack.id) {
+        // Clean up stale audio tracks
+        stream.getAudioTracks().forEach((existingTrack) => {
+          if (existingTrack.id !== newTrack.id) {
             stream.removeTrack(existingTrack);
           }
         });
 
-        // Add the new live track if not already present
-        if (!stream.getTracks().some((t) => t.id === newTrack.id)) {
+        if (!stream.getAudioTracks().some((t) => t.id === newTrack.id)) {
           stream.addTrack(newTrack);
         }
 
-        // Fast video sync: immediately attach stream to video element
-        const videoEl = remoteVideoRefs.current[peerId];
-        if (videoEl) {
-          if (videoEl.srcObject !== stream) {
-            videoEl.srcObject = stream;
-          }
-          videoEl.play().catch(() => {});
-        }
-
-        // Fast audio sync: immediately attach stream to audio element
+        // Fast audio playback binding
         const audioEl = remoteAudioRefs.current[peerId];
         if (audioEl) {
           if (audioEl.srcObject !== stream) {
@@ -423,23 +363,19 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           });
         }
 
-        const hasVideo = stream.getVideoTracks().some((t) => t.readyState === 'live');
-
         setPeers((prev) => {
           const existing = prev[peerId] || {
             userId: peerId,
             userName: 'Collaborator',
             userRole: 'CANDIDATE',
             isMicOn: true,
-            isCamOn: hasVideo,
             isSpeaking: false
           };
           return {
             ...prev,
             [peerId]: {
               ...existing,
-              stream,
-              isCamOn: existing.isCamOn || hasVideo
+              stream
             }
           };
         });
@@ -461,22 +397,13 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
         makingOfferRef.current[peerId] = true;
 
-        // Ensure active local tracks are attached to peer connection senders
+        // Ensure active local audio track is attached to sender
         if (localRawAudioStreamRef.current) {
           const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
           if (aTrack) {
             const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
             if (sender) {
               await sender.replaceTrack(aTrack).catch(() => {});
-            }
-          }
-        }
-        if (localVideoStreamRef.current) {
-          const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
-          if (vTrack) {
-            const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
-            if (sender) {
-              await sender.replaceTrack(vTrack).catch(() => {});
             }
           }
         }
@@ -498,19 +425,12 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     [currentUserId, getOrCreatePeerConnection, sendMessage]
   );
 
-  // Fast Video Resync Trigger: re-checks tracks and re-binds video elements
-  const resyncCameraFeeds = useCallback(() => {
-    setIsSyncingCam(true);
-    // 1. Re-bind local video
-    if (localVideoRef.current && localVideoStreamRef.current) {
-      localVideoRef.current.srcObject = localVideoStreamRef.current;
-      localVideoRef.current.play().catch(() => {});
-    }
+  // Quick Voice Reconnect Trigger
+  const reconnectVoice = useCallback(() => {
+    setIsReconnecting(true);
 
-    // 2. Broadcast status update and ping all peers
     sendMessage('MEDIA_STATUS_UPDATE', {
       isMicOn: isMicOnRef.current,
-      isCamOn: isCamOnRef.current,
       isSpeaking: isLocalSpeakingRef.current,
       resyncRequested: true
     });
@@ -520,7 +440,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     });
 
     setTimeout(() => {
-      setIsSyncingCam(false);
+      setIsReconnecting(false);
     }, 800);
   }, [initiateOffer, sendMessage]);
 
@@ -531,7 +451,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
     try {
       if (nextState) {
-        // High quality microphone constraints with browser native echo cancellation and noise suppression
+        // High quality microphone constraints with browser-native echo cancellation and noise suppression
         const audioConstraints: MediaTrackConstraints = {
           echoCancellation: { ideal: true },
           noiseSuppression: { ideal: true },
@@ -562,7 +482,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             setIsMicOn(false);
             sendMessage('MEDIA_STATUS_UPDATE', {
               isMicOn: false,
-              isCamOn: isCamOnRef.current,
               isSpeaking: false
             });
           };
@@ -571,7 +490,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         // Setup speech visual level detector
         setupSpeechDetector(micStream);
 
-        // Attach pristine audio track to all known peers
+        // Attach audio track to all known peers
         const peerIds = new Set([
           ...Object.keys(peersRef.current),
           ...initialParticipants.map((p) => p.userId).filter((id) => id && String(id) !== String(currentUserId))
@@ -613,7 +532,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
       sendMessage('MEDIA_STATUS_UPDATE', {
         isMicOn: nextState,
-        isCamOn: isCamOnRef.current,
         isSpeaking: false
       });
     } catch (err: any) {
@@ -621,116 +539,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       setMediaError(err.name === 'NotAllowedError' ? 'Microphone permission blocked.' : 'Microphone unavailable.');
       setIsMicOn(false);
     }
-  };
-
-  // Toggle Camera with Fast Sync and Immediate Visibility to Both Sides
-  const toggleCam = async () => {
-    const nextState = !isCamOn;
-    setMediaError(null);
-
-    try {
-      if (nextState) {
-        // High quality 720p 30fps camera stream
-        const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
-            frameRate: { ideal: 30, max: 60 }
-          }
-        });
-
-        const videoTrack = videoStream.getVideoTracks()[0];
-        localVideoStreamRef.current = videoStream;
-
-        if (videoTrack) {
-          videoTrack.enabled = true;
-          videoTrack.onended = () => {
-            if (localVideoStreamRef.current) {
-              localVideoStreamRef.current.getVideoTracks().forEach((t) => t.stop());
-              localVideoStreamRef.current = null;
-            }
-            if (localVideoRef.current) {
-              localVideoRef.current.srcObject = null;
-            }
-            Object.values(peerConnectionsRef.current).forEach((pc) => {
-              if (!pc || pc.connectionState === 'closed') return;
-              const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
-              if (sender) {
-                sender.replaceTrack(null).catch(() => {});
-              }
-            });
-            setIsCamOn(false);
-            sendMessage('MEDIA_STATUS_UPDATE', {
-              isMicOn: isMicOnRef.current,
-              isCamOn: false,
-              isSpeaking: isLocalSpeakingRef.current
-            });
-          };
-        }
-
-        // 1. Immediately bind local camera feed
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = videoStream;
-          localVideoRef.current.play().catch(() => {});
-        }
-
-        // 2. Transmit video track to all active peer connections
-        const peerIds = new Set([
-          ...Object.keys(peersRef.current),
-          ...initialParticipants.map((p) => p.userId).filter((id) => id && String(id) !== String(currentUserId))
-        ]);
-
-        for (const peerId of peerIds) {
-          const pc = getOrCreatePeerConnection(peerId);
-          if (!pc || pc.connectionState === 'closed') continue;
-          const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(videoTrack).catch(() => {});
-          } else {
-            pc.addTrack(videoTrack, videoStream);
-            initiateOffer(peerId);
-          }
-        }
-
-        setIsCamOn(true);
-      } else {
-        // Stop hardware camera tracks
-        if (localVideoStreamRef.current) {
-          localVideoStreamRef.current.getVideoTracks().forEach((t) => t.stop());
-          localVideoStreamRef.current = null;
-        }
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = null;
-        }
-
-        // Replace track with null on all peers
-        for (const pc of Object.values(peerConnectionsRef.current)) {
-          if (!pc || pc.connectionState === 'closed') continue;
-          const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
-          if (sender) {
-            sender.replaceTrack(null).catch(() => {});
-          }
-        }
-
-        setIsCamOn(false);
-      }
-
-      sendMessage('MEDIA_STATUS_UPDATE', {
-        isMicOn: isMicOnRef.current,
-        isCamOn: nextState,
-        isSpeaking: isLocalSpeakingRef.current
-      });
-    } catch (err: any) {
-      console.error('[LiveMedia] Camera access error:', err);
-      setMediaError(err.name === 'NotAllowedError' ? 'Camera permission blocked.' : 'Camera unavailable.');
-      setIsCamOn(false);
-    }
-  };
-
-  // Toggle Noise Cancellation UI mode
-  const toggleNoiseCancellation = () => {
-    setIsNoiseCancellationOn(!isNoiseCancellationOn);
   };
 
   // Central Socket Message Dispatcher
@@ -754,7 +562,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                     userRole: p.role || 'CANDIDATE',
                     avatarUrl: p.avatarUrl,
                     isMicOn: false,
-                    isCamOn: false,
                     isSpeaking: false,
                     stream: remoteStreamsRef.current[pid]
                   };
@@ -790,21 +597,18 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                 userRole: payload.role || 'CANDIDATE',
                 avatarUrl: payload.avatarUrl,
                 isMicOn: false,
-                isCamOn: false,
                 isSpeaking: false,
                 stream: remoteStreamsRef.current[joinedUserId]
               }
             }));
 
-            // Announce current status to newcomer
+            // Announce current mic status to newcomer
             sendMessage('MEDIA_STATUS_UPDATE', {
               isMicOn: isMicOnRef.current,
-              isCamOn: isCamOnRef.current,
               isSpeaking: isLocalSpeakingRef.current
             });
 
             getOrCreatePeerConnection(joinedUserId);
-            // Deterministic initiator: only initiate if currentUserId < joinedUserId
             if (currentUserId && currentUserId.localeCompare(joinedUserId) < 0) {
               initiateOffer(joinedUserId);
             }
@@ -844,7 +648,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                 userRole: payload.userRole || 'CANDIDATE',
                 avatarUrl: payload.avatarUrl,
                 isMicOn: false,
-                isCamOn: false,
                 isSpeaking: false,
                 stream: remoteStreamsRef.current[peerId]
               };
@@ -856,22 +659,12 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                   userRole: payload.userRole || existing.userRole,
                   avatarUrl: payload.avatarUrl || existing.avatarUrl,
                   isMicOn: payload.isMicOn !== undefined ? !!payload.isMicOn : existing.isMicOn,
-                  isCamOn: payload.isCamOn !== undefined ? !!payload.isCamOn : existing.isCamOn,
                   isSpeaking: payload.isSpeaking !== undefined ? !!payload.isSpeaking : existing.isSpeaking,
                   stream: existing.stream || remoteStreamsRef.current[peerId]
                 }
               };
             });
 
-            // Fast playback trigger when camera or mic turns on
-            if (payload.isCamOn) {
-              const videoEl = remoteVideoRefs.current[peerId];
-              if (videoEl) {
-                videoEl.play().catch(() => {});
-              }
-            }
-
-            // If resync was requested by peer, renegotiate
             if (payload.resyncRequested) {
               initiateOffer(peerId);
             }
@@ -889,10 +682,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
             if (offerCollision) {
               if (!isPolite) {
-                // Impolite peer ignores colliding offer
                 return;
               }
-              // Polite peer awaits rollback
               try {
                 await pc.setLocalDescription({ type: 'rollback' });
               } catch (e) {
@@ -903,29 +694,20 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             try {
               await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-              // Drain any queued ICE candidates
+              // Drain queued ICE candidates
               const pending = pendingCandidatesRef.current[fromUserId] || [];
               pendingCandidatesRef.current[fromUserId] = [];
               for (const c of pending) {
                 await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
               }
 
-              // Re-attach active local tracks
+              // Re-attach active local audio track if mic is on
               if (localRawAudioStreamRef.current) {
                 const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
                 if (aTrack) {
                   const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
                   if (sender) {
                     await sender.replaceTrack(aTrack).catch(() => {});
-                  }
-                }
-              }
-              if (localVideoStreamRef.current) {
-                const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
-                if (vTrack) {
-                  const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
-                  if (sender) {
-                    await sender.replaceTrack(vTrack).catch(() => {});
                   }
                 }
               }
@@ -953,7 +735,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               try {
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-                // Drain queued ICE candidates
                 const pending = pendingCandidatesRef.current[fromUserId] || [];
                 pendingCandidatesRef.current[fromUserId] = [];
                 for (const c of pending) {
@@ -989,7 +770,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     [currentUserId, getOrCreatePeerConnection, initiateOffer, sendMessage]
   );
 
-  // Subscribe to real-time socket events via direct listener (zero dropped frames/messages)
+  // Subscribe to real-time socket events via direct listener
   useEffect(() => {
     if (addSocketListener) {
       return addSocketListener((msg) => {
@@ -1020,7 +801,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               userRole: p.role || 'CANDIDATE',
               avatarUrl: p.avatarUrl,
               isMicOn: false,
-              isCamOn: false,
               isSpeaking: false,
               stream: remoteStreamsRef.current[p.userId]
             }
@@ -1039,7 +819,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   useEffect(() => {
     sendMessage('MEDIA_STATUS_UPDATE', {
       isMicOn: false,
-      isCamOn: false,
       isSpeaking: false
     });
 
@@ -1048,10 +827,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       if (localRawAudioStreamRef.current) {
         localRawAudioStreamRef.current.getTracks().forEach((track) => track.stop());
         localRawAudioStreamRef.current = null;
-      }
-      if (localVideoStreamRef.current) {
-        localVideoStreamRef.current.getTracks().forEach((track) => track.stop());
-        localVideoStreamRef.current = null;
       }
       Object.values(peerConnectionsRef.current).forEach((pc) => {
         try {
@@ -1068,19 +843,19 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
   const activePeerList = Object.values(peers);
 
-  // If in docked mini bar mode (keep video & audio elements in DOM with 0 height so WebRTC track decoder never disconnects)
+  // If in docked mini bar mode (keep audio element active in DOM so voice call never terminates)
   if (isDocked) {
     return (
       <div className="flex items-center justify-between gap-2 p-2 px-3 rounded-xl bg-slate-900/90 dark:bg-white/[0.04] border border-slate-700/60 dark:border-white/10 text-white backdrop-blur-md shadow-lg text-xs">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isMicOn || isCamOn ? 'bg-emerald-400 opacity-75' : 'bg-indigo-400 opacity-40'}`}></span>
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${isMicOn || isCamOn ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isMicOn ? 'bg-emerald-400 opacity-75' : 'bg-indigo-400 opacity-40'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isMicOn ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
           </span>
-          <span className="font-bold text-[11px] text-slate-200">Live Call</span>
-          {isNoiseCancellationOn && (
+          <span className="font-bold text-[11px] text-slate-200">Voice Call</span>
+          {isMicOn && (
             <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono flex items-center gap-0.5">
-              <ShieldCheck className="w-2.5 h-2.5" /> Noise Reduced
+              Mic Active
             </span>
           )}
         </div>
@@ -1097,63 +872,38 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             {isMicOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-rose-400" />}
           </button>
 
-          {/* Cam Toggle */}
-          <button
-            onClick={toggleCam}
-            className={`p-1.5 rounded-lg transition cursor-pointer ${
-              isCamOn ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40' : 'bg-white/10 text-slate-300 hover:text-white'
-            }`}
-            title={isCamOn ? 'Turn Off Camera' : 'Turn On Camera'}
-          >
-            {isCamOn ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5 text-slate-400" />}
-          </button>
-
           {/* Expand Call */}
           {onExpand && (
             <button
               onClick={onExpand}
               className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition cursor-pointer flex items-center gap-1 text-[10px] font-bold"
-              title="Expand Face-to-Face Video Call"
+              title="Expand Voice Chat"
             >
               <Maximize2 className="w-3 h-3" />
-              <span>Video</span>
+              <span>Voice</span>
             </button>
           )}
         </div>
 
-        {/* Hidden persistent video and audio elements so stream decoding never terminates */}
+        {/* Hidden persistent remote audio elements so audio plays uninterrupted */}
         <div className="sr-only">
-          <video ref={localVideoRef} autoPlay playsInline muted />
           {activePeerList.map((peer) => {
             const stream = peer.stream || remoteStreamsRef.current[peer.userId];
             return (
-              <React.Fragment key={peer.userId}>
-                <video
-                  ref={(el) => {
-                    remoteVideoRefs.current[peer.userId] = el;
-                    if (el && stream && el.srcObject !== stream) {
-                      el.srcObject = stream;
-                      el.play().catch(() => {});
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                  muted
-                />
-                <audio
-                  ref={(el) => {
-                    remoteAudioRefs.current[peer.userId] = el;
-                    if (el && stream && el.srcObject !== stream) {
-                      el.srcObject = stream;
-                      el.volume = 1.0;
-                      el.muted = false;
-                      el.play().catch(() => setAutoplayBlocked(true));
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                />
-              </React.Fragment>
+              <audio
+                key={peer.userId}
+                ref={(el) => {
+                  remoteAudioRefs.current[peer.userId] = el;
+                  if (el && stream && el.srcObject !== stream) {
+                    el.srcObject = stream;
+                    el.volume = 1.0;
+                    el.muted = false;
+                    el.play().catch(() => setAutoplayBlocked(true));
+                  }
+                }}
+                autoPlay
+                playsInline
+              />
             );
           })}
         </div>
@@ -1165,22 +915,22 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     <div className={`transition-all duration-300 ${isMinimized ? 'w-auto' : 'w-full'} shrink-0`}>
       {/* Container Card with Theme Styling */}
       <div
-        className={`rounded-2xl border ${themeConfig.border} ${themeConfig.bgCard} p-3 shadow-lg ${
-          themeConfig.isDark ? 'bg-slate-900/90' : 'bg-white/95'
+        className={`rounded-2xl border ${themeConfig.border} ${themeConfig.bgCard} p-3.5 shadow-lg ${
+          themeConfig.isDark ? 'bg-slate-900/95' : 'bg-white/95'
         } backdrop-blur-md transition-all duration-200 relative`}
       >
         {/* Header Ribbon */}
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/50 dark:border-white/10">
+        <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-200/50 dark:border-white/10">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isMicOn || isCamOn ? 'bg-emerald-400 opacity-75' : 'bg-indigo-400 opacity-40'}`}></span>
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isMicOn || isCamOn ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isMicOn ? 'bg-emerald-400 opacity-75' : 'bg-indigo-400 opacity-40'}`}></span>
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isMicOn ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
             </span>
             <span className="text-xs font-bold font-heading tracking-tight flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
-              <span>Face-to-Face Video</span>
+              <span>Voice Session</span>
               {connectionStatus === 'connected' && (
                 <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono font-bold flex items-center gap-0.5">
-                  <Signal className="w-2.5 h-2.5" /> P2P Live
+                  <Signal className="w-2.5 h-2.5" /> P2P Voice
                 </span>
               )}
               {isLocalSpeaking && (
@@ -1192,20 +942,20 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Quick Fast Cam Resync */}
+            {/* Quick Voice Reconnect */}
             <button
-              onClick={resyncCameraFeeds}
-              disabled={isSyncingCam}
-              className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition cursor-pointer"
-              title="Resync Connection (Fast WebRTC Refresh)"
+              onClick={reconnectVoice}
+              disabled={isReconnecting}
+              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer"
+              title="Reconnect Voice (Instant WebRTC Refresh)"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCam ? 'animate-spin text-indigo-500' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isReconnecting ? 'animate-spin text-indigo-500' : ''}`} />
             </button>
 
             {/* Speaker Sound Check Button */}
             <button
               onClick={playSpeakerTestChime}
-              className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer"
               title="Test Speaker Output (Play Test Chime)"
             >
               <Headphones className="w-3.5 h-3.5" />
@@ -1214,7 +964,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             {/* Minimize / Expand */}
             <button
               onClick={() => setIsMinimized(!isMinimized)}
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded transition cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer"
               title={isMinimized ? 'Expand Media' : 'Minimize Media'}
             >
               {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
@@ -1224,123 +974,91 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
         {/* Autoplay Blocked Banner */}
         {autoplayBlocked && (
-          <div className="mb-2 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-[11px] flex items-center justify-between gap-2 shadow-xs">
+          <div className="mb-2.5 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-[11px] flex items-center justify-between gap-2 shadow-xs">
             <div className="flex items-center gap-1.5">
               <VolumeX className="w-3.5 h-3.5 text-amber-500 shrink-0" />
               <span>Audio blocked by browser policy.</span>
             </div>
             <button
               onClick={handleEnableSound}
-              className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] cursor-pointer"
             >
-              Enable Sound
+              Enable Audio
             </button>
           </div>
         )}
 
         {/* Media Error Message */}
         {mediaError && (
-          <div className="mb-2 p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] flex items-center gap-1.5">
+          <div className="mb-2.5 p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            <span>{mediaError} Check browser camera/mic permissions.</span>
+            <span>{mediaError} Check microphone permissions.</span>
           </div>
         )}
 
-        {/* Expanded View: Video Feeds Grid (Face-to-Face) */}
+        {/* Expanded View: Voice Participants Grid */}
         {!isMinimized && (
-          <div className="space-y-2.5">
-            {/* Grid of video tiles: You + Remote Collaborator */}
-            <div className={`grid ${activePeerList.length > 0 ? 'grid-cols-2 gap-2' : 'grid-cols-1'} items-center`}>
-              {/* Local Participant Tile */}
+          <div className="space-y-3">
+            {/* Grid of voice cards: You + Remote Collaborator */}
+            <div className={`grid ${activePeerList.length > 0 ? 'grid-cols-2 gap-2.5' : 'grid-cols-1'} items-stretch`}>
+              {/* Local Participant Voice Tile */}
               <div
-                className={`relative aspect-video rounded-xl overflow-hidden border ${
+                className={`relative p-3.5 rounded-xl border ${
                   isLocalSpeaking
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                    : 'border-slate-300/40 dark:border-white/10'
-                } bg-slate-950 flex flex-col items-center justify-center transition-all duration-200 shadow-inner`}
+                    ? 'border-emerald-500 bg-emerald-50/10 dark:bg-emerald-950/20 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                    : 'border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02]'
+                } flex flex-col items-center justify-center transition-all duration-200 shadow-xs min-h-[110px]`}
               >
-                {/* Local Video Stream Element */}
-                <video
-                  ref={(el) => {
-                    localVideoRef.current = el;
-                    if (el && localVideoStreamRef.current) {
-                      if (el.srcObject !== localVideoStreamRef.current) {
-                        el.srcObject = localVideoStreamRef.current;
-                      }
-                      el.play().catch(() => {});
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover scale-x-[-1] ${isCamOn ? 'block' : 'hidden'}`}
-                />
-
-                {/* Avatar Placeholder when Camera is Off */}
-                {!isCamOn && (
-                  <div className="flex flex-col items-center justify-center p-2 text-center">
-                    <UserAvatar
-                      name={currentUserName}
-                      avatarUrl={currentUserAvatarUrl}
-                      size="md"
-                      isOnline={true}
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1.5 font-medium">Camera Off</span>
-                  </div>
-                )}
-
-                {/* Top Badge: Name & Role */}
-                <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
-                    You ({currentUserRole})
-                  </span>
+                <div className="relative mb-2">
+                  <UserAvatar
+                    name={currentUserName}
+                    avatarUrl={currentUserAvatarUrl}
+                    size="md"
+                    isOnline={true}
+                  />
+                  {isLocalSpeaking && (
+                    <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 animate-ping opacity-75" />
+                  )}
                 </div>
 
-                {/* Bottom Badges: Mic & Sound Wave */}
-                <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-                  {isLocalSpeaking && (
-                    <div className="flex items-end gap-0.5 h-3 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
-                      <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
-                      <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce" />
-                      <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
-                    </div>
-                  )}
+                <div className="text-center w-full">
+                  <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate px-1">
+                    You ({currentUserRole})
+                  </div>
+                  <div className="mt-1 flex items-center justify-center gap-1.5">
+                    {isMicOn ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        <Mic className="w-2.5 h-2.5" /> Mic Live
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20">
+                        <MicOff className="w-2.5 h-2.5" /> Muted
+                      </span>
+                    )}
 
-                  <span className={`p-1 rounded-md text-[10px] ${isMicOn ? 'bg-emerald-500/80 text-white' : 'bg-rose-500/80 text-white'}`}>
-                    {isMicOn ? <Mic className="w-2.5 h-2.5" /> : <MicOff className="w-2.5 h-2.5" />}
-                  </span>
+                    {isLocalSpeaking && (
+                      <div className="flex items-end gap-0.5 h-3 px-1 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
+                        <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2" />
+                        <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3" />
+                        <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-1.5" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Remote Peer Tiles */}
+              {/* Remote Peer Voice Tiles */}
               {activePeerList.map((peer) => {
                 const stream = peer.stream || remoteStreamsRef.current[peer.userId];
                 return (
                   <div
                     key={peer.userId}
-                    className={`relative aspect-video rounded-xl overflow-hidden border ${
+                    className={`relative p-3.5 rounded-xl border ${
                       peer.isSpeaking
-                        ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                        : 'border-slate-300/40 dark:border-white/10'
-                    } bg-slate-950 flex flex-col items-center justify-center transition-all duration-200 shadow-inner`}
+                        ? 'border-emerald-500 bg-emerald-50/10 dark:bg-emerald-950/20 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                        : 'border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02]'
+                    } flex flex-col items-center justify-center transition-all duration-200 shadow-xs min-h-[110px]`}
                   >
-                    {/* Remote Video Stream Element */}
-                    <video
-                      ref={(el) => {
-                        remoteVideoRefs.current[peer.userId] = el;
-                        if (el && stream && el.srcObject !== stream) {
-                          el.srcObject = stream;
-                        }
-                        if (el && peer.isCamOn) {
-                          el.play().catch(() => {});
-                        }
-                      }}
-                      autoPlay
-                      playsInline
-                      muted
-                      className={`w-full h-full object-cover ${peer.isCamOn ? 'block' : 'hidden'}`}
-                    />
-
                     {/* Dedicated Remote Audio Element (Unmuted for crisp live voice) */}
                     <audio
                       ref={(el) => {
@@ -1359,41 +1077,41 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                       className="sr-only"
                     />
 
-                    {/* Remote Avatar Placeholder */}
-                    {!peer.isCamOn && (
-                      <div className="flex flex-col items-center justify-center p-2 text-center">
-                        <UserAvatar
-                          name={peer.userName}
-                          avatarUrl={peer.avatarUrl}
-                          size="md"
-                          isOnline={true}
-                        />
-                        <span className="text-[10px] text-slate-400 mt-1.5 font-medium flex items-center gap-1">
-                          <span>{peer.userName} (Camera Off)</span>
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Top Badge: Peer Name */}
-                    <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
-                        {peer.userName}
-                      </span>
+                    <div className="relative mb-2">
+                      <UserAvatar
+                        name={peer.userName}
+                        avatarUrl={peer.avatarUrl}
+                        size="md"
+                        isOnline={true}
+                      />
+                      {peer.isSpeaking && (
+                        <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 animate-ping opacity-75" />
+                      )}
                     </div>
 
-                    {/* Bottom Badges */}
-                    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-                      {peer.isSpeaking && (
-                        <div className="flex items-end gap-0.5 h-3 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
-                          <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
-                          <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce" />
-                          <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
-                        </div>
-                      )}
+                    <div className="text-center w-full">
+                      <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate px-1">
+                        {peer.userName}
+                      </div>
+                      <div className="mt-1 flex items-center justify-center gap-1.5">
+                        {peer.isMicOn ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                            <Mic className="w-2.5 h-2.5" /> Mic Live
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400">
+                            <MicOff className="w-2.5 h-2.5 text-rose-400" /> Muted
+                          </span>
+                        )}
 
-                      <span className={`p-1 rounded-md text-[10px] ${peer.isMicOn ? 'bg-emerald-500/80 text-white' : 'bg-slate-700/80 text-white'}`}>
-                        {peer.isMicOn ? <Mic className="w-2.5 h-2.5" /> : <MicOff className="w-2.5 h-2.5 text-rose-300" />}
-                      </span>
+                        {peer.isSpeaking && (
+                          <div className="flex items-end gap-0.5 h-3 px-1 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
+                            <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2" />
+                            <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3" />
+                            <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-1.5" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1402,73 +1120,41 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
             {/* Waiting Notice if Solo */}
             {activePeerList.length === 0 && (
-              <div className="text-center py-2 px-3 rounded-xl bg-slate-100/50 dark:bg-white/[0.02] border border-dashed border-slate-300 dark:border-white/10">
+              <div className="text-center py-2.5 px-3 rounded-xl bg-slate-100/50 dark:bg-white/[0.02] border border-dashed border-slate-300 dark:border-white/10">
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Waiting for collaborator to join the session...
                 </p>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  Turn your camera on anytime; it syncs automatically upon connection.
+                  Your mic connects automatically upon peer arrival.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Controls Toolbar: Mic + Cam + Active Noise Cancellation Badge */}
-        <div className="mt-2.5 pt-2 border-t border-slate-200/50 dark:border-white/10 flex flex-col gap-2">
-          {/* Main Action Buttons */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Mic Button */}
-            <button
-              onClick={toggleMic}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition cursor-pointer shadow-sm ${
-                isMicOn
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20'
-              }`}
-              title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
-            >
-              {isMicOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-              <span className="text-[11px] font-bold">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
-            </button>
-
-            {/* Cam Button */}
-            <button
-              onClick={toggleCam}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition cursor-pointer shadow-sm ${
-                isCamOn
-                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20'
-                  : 'bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10'
-              }`}
-              title={isCamOn ? 'Turn Off Camera' : 'Turn On Camera (Fast Sync)'}
-            >
-              {isCamOn ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
-              <span className="text-[11px] font-bold">{isCamOn ? 'Cam On' : 'Cam Off'}</span>
-            </button>
-          </div>
-
-          {/* Noise Cancellation Control Strip */}
-          <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-slate-100/60 dark:bg-white/[0.03] border border-slate-200/50 dark:border-white/5 text-[10px]">
-            <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium">
-              <ShieldCheck className={`w-3.5 h-3.5 ${isNoiseCancellationOn ? 'text-emerald-500' : 'text-slate-400'}`} />
-              <span>AI Noise Cancellation</span>
-              <span className="px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold uppercase">
-                {isNoiseCancellationOn ? 'Active' : 'Off'}
-              </span>
-            </div>
-
-            <button
-              onClick={toggleNoiseCancellation}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
-                isNoiseCancellationOn
-                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30'
-                  : 'bg-slate-200 dark:bg-white/10 text-slate-500 hover:text-slate-700'
-              }`}
-              title="Toggle Noise Cancellation (Echo Cancellation & Ambient Filtering)"
-            >
-              {isNoiseCancellationOn ? 'On' : 'Off'}
-            </button>
-          </div>
+        {/* Controls Toolbar: Microphone Button Only */}
+        <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-white/10">
+          <button
+            onClick={toggleMic}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm ${
+              isMicOn
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25 ring-2 ring-emerald-500/30'
+                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/25'
+            }`}
+            title={isMicOn ? 'Click to Mute Microphone' : 'Click to Unmute Microphone'}
+          >
+            {isMicOn ? (
+              <>
+                <Mic className="w-4 h-4 animate-pulse text-white" />
+                <span className="text-[12px]">Mic is ON (Click to Mute)</span>
+              </>
+            ) : (
+              <>
+                <MicOff className="w-4 h-4 text-rose-500" />
+                <span className="text-[12px]">Mic is OFF (Click to Speak)</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
