@@ -655,7 +655,7 @@ ${privateNotes || 'No notes added.'}`;
     [fetchSessionDetails, fetchFiles, fetchQuestions, fetchLogs, rightTab, navigate]
   );
 
-  const { isConnected, sendMessage } = useSessionSocket({
+  const { isConnected, sendMessage, addMessageListener } = useSessionSocket({
     sessionId,
     onMessage: handleWsMessage
   });
@@ -2484,6 +2484,7 @@ ${privateNotes || 'No notes added.'}`;
               currentUserAvatarUrl={user?.avatarUrl}
               sendMessage={sendMessage}
               lastSocketMessage={lastWsMsg}
+              addSocketListener={addMessageListener}
               initialParticipants={initialParticipants}
               isDocked={false}
             />

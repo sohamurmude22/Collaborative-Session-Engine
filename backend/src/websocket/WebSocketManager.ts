@@ -504,6 +504,7 @@ export class WebSocketManager {
               userName: ws.user.name,
               userRole: ws.user.role,
               avatarUrl: ws.user.avatarUrl || '',
+              ...message.payload,
               isMicOn: !!message.payload?.isMicOn,
               isCamOn: !!message.payload?.isCamOn,
               isSpeaking: !!message.payload?.isSpeaking

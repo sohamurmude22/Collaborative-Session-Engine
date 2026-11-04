@@ -51,12 +51,20 @@ export function useSessionSocket({ sessionId, onMessage }: UseSessionSocketProps
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const isUnmountedRef = useRef(false);
+  const messageListenersRef = useRef<Set<(msg: WSMessage) => void>>(new Set());
 
   // Store latest onMessage in ref to avoid reconnecting whenever handler references change
   const onMessageRef = useRef(onMessage);
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
+
+  const addMessageListener = useCallback((listener: (msg: WSMessage) => void) => {
+    messageListenersRef.current.add(listener);
+    return () => {
+      messageListenersRef.current.delete(listener);
+    };
+  }, []);
 
   const connect = useCallback(() => {
     if (!sessionId || isUnmountedRef.current) return;
@@ -95,6 +103,14 @@ export function useSessionSocket({ sessionId, onMessage }: UseSessionSocketProps
           if (onMessageRef.current) {
             onMessageRef.current(msg);
           }
+          // Direct synchronous delivery to all registered listeners (avoids React state batching drops)
+          messageListenersRef.current.forEach((listener) => {
+            try {
+              listener(msg);
+            } catch (err) {
+              console.error('[WebSocket] Listener error:', err);
+            }
+          });
         } catch (err) {
           console.error('[WebSocket] Parse error:', err);
         }
@@ -154,5 +170,5 @@ export function useSessionSocket({ sessionId, onMessage }: UseSessionSocketProps
     }
   }, [sessionId]);
 
-  return { isConnected, sendMessage };
+  return { isConnected, sendMessage, addMessageListener };
 }

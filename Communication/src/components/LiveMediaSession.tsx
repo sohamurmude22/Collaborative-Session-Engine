@@ -12,8 +12,7 @@ import {
   Headphones,
   Signal,
   ShieldCheck,
-  RefreshCw,
-  Sparkles
+  RefreshCw
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
 import { UserAvatar } from './UserAvatar.js';
@@ -33,6 +32,7 @@ interface LiveMediaSessionProps {
   currentUserAvatarUrl?: string;
   sendMessage: (type: string, payload: any) => void;
   lastSocketMessage?: any;
+  addSocketListener?: (listener: (msg: any) => void) => () => void;
   initialParticipants?: ParticipantInfo[];
   isDocked?: boolean;
   onExpand?: () => void;
@@ -55,7 +55,8 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' }
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
   ]
 };
 
@@ -67,6 +68,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   currentUserAvatarUrl,
   sendMessage,
   lastSocketMessage,
+  addSocketListener,
   initialParticipants = [],
   isDocked = false,
   onExpand
@@ -89,7 +91,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     const initial: Record<string, PeerMediaState> = {};
     if (initialParticipants && initialParticipants.length > 0) {
       initialParticipants.forEach((p) => {
-        if (p.userId && p.userId !== currentUserId) {
+        if (p.userId && String(p.userId) !== String(currentUserId)) {
           initial[p.userId] = {
             userId: p.userId,
             userName: p.name || 'Collaborator',
@@ -112,20 +114,14 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
   // Media & WebRTC Refs
   const localRawAudioStreamRef = useRef<MediaStream | null>(null);
-  const localProcessedAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const localVideoStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
+  const remoteStreamsRef = useRef<Record<string, MediaStream>>({});
   const pendingCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const makingOfferRef = useRef<Record<string, boolean>>({});
 
-  // Web Audio DSP Noise Filter Nodes
+  // Web Audio Analyser for local speech detection (visual only - does not mute audio stream)
   const audioContextRef = useRef<AudioContext | null>(null);
-  const rawSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const highPassFilterRef = useRef<BiquadFilterNode | null>(null);
-  const lowPassFilterRef = useRef<BiquadFilterNode | null>(null);
-  const compressorRef = useRef<DynamicsCompressorNode | null>(null);
-  const noiseGateGainRef = useRef<GainNode | null>(null);
-  const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micAnimFrameRef = useRef<number | null>(null);
 
@@ -134,16 +130,17 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   isMicOnRef.current = isMicOn;
   const isCamOnRef = useRef(isCamOn);
   isCamOnRef.current = isCamOn;
-  const isNoiseCancellationOnRef = useRef(isNoiseCancellationOn);
-  isNoiseCancellationOnRef.current = isNoiseCancellationOn;
   const isLocalSpeakingRef = useRef(isLocalSpeaking);
   isLocalSpeakingRef.current = isLocalSpeaking;
+  const peersRef = useRef(peers);
+  peersRef.current = peers;
 
   // Unblock browser autoplay on any user interaction
   useEffect(() => {
     const unlockAutoplay = () => {
       Object.values(remoteAudioRefs.current).forEach((el) => {
         if (el && el.srcObject) {
+          el.muted = false;
           el.play().catch(() => {});
         }
       });
@@ -157,9 +154,11 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
     window.addEventListener('click', unlockAutoplay, { once: true });
     window.addEventListener('keydown', unlockAutoplay, { once: true });
+    window.addEventListener('touchstart', unlockAutoplay, { once: true });
     return () => {
       window.removeEventListener('click', unlockAutoplay);
       window.removeEventListener('keydown', unlockAutoplay);
+      window.removeEventListener('touchstart', unlockAutoplay);
     };
   }, []);
 
@@ -176,11 +175,12 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   // Sync remote streams to remote video and audio elements on peers state change
   useEffect(() => {
     Object.entries(peers).forEach(([peerId, peer]) => {
-      if (peer.stream) {
+      const stream = peer.stream || remoteStreamsRef.current[peerId];
+      if (stream) {
         const videoEl = remoteVideoRefs.current[peerId];
         if (videoEl) {
-          if (videoEl.srcObject !== peer.stream) {
-            videoEl.srcObject = peer.stream;
+          if (videoEl.srcObject !== stream) {
+            videoEl.srcObject = stream;
           }
           if (peer.isCamOn) {
             videoEl.play().catch(() => {});
@@ -188,8 +188,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         }
         const audioEl = remoteAudioRefs.current[peerId];
         if (audioEl) {
-          if (audioEl.srcObject !== peer.stream) {
-            audioEl.srcObject = peer.stream;
+          if (audioEl.srcObject !== stream) {
+            audioEl.srcObject = stream;
           }
           audioEl.volume = 1.0;
           audioEl.muted = false;
@@ -199,124 +199,68 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     });
   }, [peers]);
 
-  // Web Audio DSP Pipeline: High-pass + Low-pass + Compressor + Adaptive Noise Gate
-  const setupNoiseCancelledAudioPipeline = (rawMicStream: MediaStream): MediaStreamTrack => {
-    cleanupAudioPipeline();
-
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) {
-      // Fallback: return raw mic track if Web Audio API is unavailable
-      return rawMicStream.getAudioTracks()[0];
-    }
-
-    const audioCtx = new AudioCtx();
-    audioContextRef.current = audioCtx;
-
-    // 1. Raw Microphone Source
-    const source = audioCtx.createMediaStreamSource(rawMicStream);
-    rawSourceNodeRef.current = source;
-
-    // 2. High-pass filter at 85Hz: eliminates table vibrations, PC fan hum, and air conditioner drone
-    const highPass = audioCtx.createBiquadFilter();
-    highPass.type = 'highpass';
-    highPass.frequency.setValueAtTime(85, audioCtx.currentTime);
-    highPass.Q.setValueAtTime(0.7, audioCtx.currentTime);
-    highPassFilterRef.current = highPass;
-
-    // 3. Low-pass filter at 8000Hz: eliminates electronic coil whine, keyboard clicks, and high-pitch hiss
-    const lowPass = audioCtx.createBiquadFilter();
-    lowPass.type = 'lowpass';
-    lowPass.frequency.setValueAtTime(8000, audioCtx.currentTime);
-    lowPass.Q.setValueAtTime(0.7, audioCtx.currentTime);
-    lowPassFilterRef.current = lowPass;
-
-    // 4. Dynamics Compressor: levels speech dynamics, prevents loud harsh peaks, boosts soft whisper
-    const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-28, audioCtx.currentTime);
-    compressor.knee.setValueAtTime(25, audioCtx.currentTime);
-    compressor.ratio.setValueAtTime(8, audioCtx.currentTime);
-    compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
-    compressor.release.setValueAtTime(0.25, audioCtx.currentTime);
-    compressorRef.current = compressor;
-
-    // 5. Adaptive Noise Gate Gain: silences ambient room noise when user is not speaking
-    const noiseGateGain = audioCtx.createGain();
-    noiseGateGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
-    noiseGateGainRef.current = noiseGateGain;
-
-    // 6. Analyser for speech detection and noise gating
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyserRef.current = analyser;
-
-    // 7. Destination: output processed clean stream
-    const destination = audioCtx.createMediaStreamDestination();
-    audioDestinationRef.current = destination;
-
-    // Connect DSP chain:
-    // Raw -> HighPass -> LowPass -> Compressor -> NoiseGateGain -> Destination & Analyser
-    source.connect(highPass);
-    highPass.connect(lowPass);
-    lowPass.connect(compressor);
-    compressor.connect(noiseGateGain);
-    noiseGateGain.connect(destination);
-
-    // Also connect to analyser to monitor voice levels
-    compressor.connect(analyser);
-
-    // Run active noise gate loop
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    let speakingFrames = 0;
-
-    const processAudioLevels = () => {
-      if (!analyserRef.current || !audioContextRef.current) return;
-      analyserRef.current.getByteFrequencyData(dataArray);
-
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      const averageVolume = sum / bufferLength;
-
-      // Threshold: voice is typically > 18, ambient floor is ~5-15
-      const isAboveNoiseFloor = averageVolume > 16;
-      if (isAboveNoiseFloor && isMicOnRef.current) {
-        speakingFrames = Math.min(speakingFrames + 1, 10);
-      } else {
-        speakingFrames = Math.max(speakingFrames - 1, 0);
+  // Set up speech detection using AnalyserNode (only for UI visual meter, never muting audio)
+  const setupSpeechDetector = useCallback((stream: MediaStream) => {
+    cleanupSpeechDetector();
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
       }
 
-      const currentlySpeaking = speakingFrames > 2;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyserRef.current = analyser;
 
-      // Noise gate: if user is not speaking, gently attenuate output by 80% to kill room noise
-      if (isNoiseCancellationOnRef.current && noiseGateGainRef.current && audioContextRef.current) {
-        const targetGain = currentlySpeaking ? 1.0 : 0.08;
-        noiseGateGainRef.current.gain.setTargetAtTime(targetGain, audioContextRef.current.currentTime, 0.04);
-      }
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      let speakingFrames = 0;
 
-      setIsLocalSpeaking((prev) => {
-        if (prev !== currentlySpeaking) {
-          sendMessage('MEDIA_STATUS_UPDATE', {
-            isMicOn: isMicOnRef.current,
-            isCamOn: isCamOnRef.current,
-            isSpeaking: currentlySpeaking
-          });
+      const checkVolume = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
         }
-        return currentlySpeaking;
-      });
+        const avg = sum / bufferLength;
 
-      micAnimFrameRef.current = requestAnimationFrame(processAudioLevels);
-    };
+        // Threshold: voice is typically > 10, ambient floor is 2-6
+        const isAboveFloor = avg > 10;
+        if (isAboveFloor && isMicOnRef.current) {
+          speakingFrames = Math.min(speakingFrames + 1, 8);
+        } else {
+          speakingFrames = Math.max(speakingFrames - 1, 0);
+        }
 
-    micAnimFrameRef.current = requestAnimationFrame(processAudioLevels);
+        const currentlySpeaking = speakingFrames > 1;
+        setIsLocalSpeaking((prev) => {
+          if (prev !== currentlySpeaking) {
+            sendMessage('MEDIA_STATUS_UPDATE', {
+              isMicOn: isMicOnRef.current,
+              isCamOn: isCamOnRef.current,
+              isSpeaking: currentlySpeaking
+            });
+          }
+          return currentlySpeaking;
+        });
 
-    const processedTrack = destination.stream.getAudioTracks()[0];
-    localProcessedAudioTrackRef.current = processedTrack;
-    return processedTrack;
-  };
+        micAnimFrameRef.current = requestAnimationFrame(checkVolume);
+      };
 
-  const cleanupAudioPipeline = () => {
+      micAnimFrameRef.current = requestAnimationFrame(checkVolume);
+    } catch (err) {
+      console.warn('[LiveMedia] Speech detector init error:', err);
+    }
+  }, [sendMessage]);
+
+  const cleanupSpeechDetector = () => {
     if (micAnimFrameRef.current) {
       cancelAnimationFrame(micAnimFrameRef.current);
       micAnimFrameRef.current = null;
@@ -327,23 +271,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       } catch {}
       audioContextRef.current = null;
     }
-    rawSourceNodeRef.current = null;
-    highPassFilterRef.current = null;
-    lowPassFilterRef.current = null;
-    compressorRef.current = null;
-    noiseGateGainRef.current = null;
-    audioDestinationRef.current = null;
     analyserRef.current = null;
     setIsLocalSpeaking(false);
-  };
-
-  // Toggle Noise Cancellation mode on/off
-  const toggleNoiseCancellation = () => {
-    const nextVal = !isNoiseCancellationOn;
-    setIsNoiseCancellationOn(nextVal);
-    if (noiseGateGainRef.current && audioContextRef.current) {
-      noiseGateGainRef.current.gain.setValueAtTime(nextVal ? 1.0 : 1.0, audioContextRef.current.currentTime);
-    }
   };
 
   // Speaker Test Chime: verifies that user's speakers/headphones are functioning properly
@@ -352,6 +281,9 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -360,10 +292,10 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
       osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.12); // E5
       osc.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.24); // G5
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
       osc.start();
-      osc.stop(ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.45);
     } catch (err) {
       console.warn('Audio test chime error:', err);
     }
@@ -372,11 +304,21 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   const handleEnableSound = () => {
     Object.values(remoteAudioRefs.current).forEach((el) => {
       if (el) {
+        el.muted = false;
+        el.volume = 1.0;
         el.play().catch(() => {});
       }
     });
     setAutoplayBlocked(false);
   };
+
+  // Helper: get or create remote persistent MediaStream for a peer
+  const getOrCreateRemoteStream = useCallback((peerId: string): MediaStream => {
+    if (!remoteStreamsRef.current[peerId]) {
+      remoteStreamsRef.current[peerId] = new MediaStream();
+    }
+    return remoteStreamsRef.current[peerId];
+  }, []);
 
   // Create or retrieve Peer Connection for a peer
   const getOrCreatePeerConnection = useCallback(
@@ -390,8 +332,24 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
       const pc = new RTCPeerConnection(RTC_CONFIG);
 
-      // Add transceivers for both audio and video to pre-reserve m-lines in SDP
-      // This allows immediate track replacement when cam/mic is toggled on!
+      // Ensure persistent remote stream object exists for this peer
+      const remoteStream = getOrCreateRemoteStream(peerId);
+
+      // Attach existing local tracks to the peer connection
+      if (localRawAudioStreamRef.current) {
+        const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
+        if (aTrack) {
+          pc.addTrack(aTrack, localRawAudioStreamRef.current);
+        }
+      }
+      if (localVideoStreamRef.current) {
+        const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
+        if (vTrack) {
+          pc.addTrack(vTrack, localVideoStreamRef.current);
+        }
+      }
+
+      // Pre-reserve audio & video transceivers if tracks are not attached yet
       const transceivers = pc.getTransceivers();
       if (!transceivers.some((t) => t.receiver.track.kind === 'audio')) {
         try {
@@ -402,23 +360,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         try {
           pc.addTransceiver('video', { direction: 'sendrecv' });
         } catch {}
-      }
-
-      // If active tracks already exist locally, attach them to transceivers immediately
-      if (localProcessedAudioTrackRef.current) {
-        const at = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
-        if (at) {
-          at.sender.replaceTrack(localProcessedAudioTrackRef.current).catch(() => {});
-        }
-      }
-      if (localVideoStreamRef.current) {
-        const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
-        if (vTrack) {
-          const vt = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
-          if (vt) {
-            vt.sender.replaceTrack(vTrack).catch(() => {});
-          }
-        }
       }
 
       // ICE Candidate handler
@@ -442,16 +383,47 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         }
       };
 
-      // Remote Track handler: handles both video and audio tracks with immediate binding
+      // Remote Track handler: binds tracks directly into the peer's persistent MediaStream
       pc.ontrack = (event) => {
-        // Collect all live tracks from all receivers
-        const receivers = pc.getReceivers();
-        const liveTracks = receivers
-          .map((r) => r.track)
-          .filter((t): t is MediaStreamTrack => Boolean(t && t.readyState === 'live'));
+        const stream = remoteStream;
+        const newTrack = event.track;
 
-        const fullStream = liveTracks.length > 0 ? new MediaStream(liveTracks) : event.streams[0] || new MediaStream([event.track]);
-        const hasLiveVideo = fullStream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+        // Clean up any stale track of the same kind
+        stream.getTracks().forEach((existingTrack) => {
+          if (existingTrack.kind === newTrack.kind && existingTrack.id !== newTrack.id) {
+            stream.removeTrack(existingTrack);
+          }
+        });
+
+        // Add the new live track if not already present
+        if (!stream.getTracks().some((t) => t.id === newTrack.id)) {
+          stream.addTrack(newTrack);
+        }
+
+        // Fast video sync: immediately attach stream to video element
+        const videoEl = remoteVideoRefs.current[peerId];
+        if (videoEl) {
+          if (videoEl.srcObject !== stream) {
+            videoEl.srcObject = stream;
+          }
+          videoEl.play().catch(() => {});
+        }
+
+        // Fast audio sync: immediately attach stream to audio element
+        const audioEl = remoteAudioRefs.current[peerId];
+        if (audioEl) {
+          if (audioEl.srcObject !== stream) {
+            audioEl.srcObject = stream;
+          }
+          audioEl.volume = 1.0;
+          audioEl.muted = false;
+          audioEl.play().catch((err) => {
+            console.warn('[LiveMedia] Remote audio autoplay blocked:', err);
+            setAutoplayBlocked(true);
+          });
+        }
+
+        const hasVideo = stream.getVideoTracks().some((t) => t.readyState === 'live');
 
         setPeers((prev) => {
           const existing = prev[peerId] || {
@@ -459,71 +431,52 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             userName: 'Collaborator',
             userRole: 'CANDIDATE',
             isMicOn: true,
-            isCamOn: hasLiveVideo,
+            isCamOn: hasVideo,
             isSpeaking: false
           };
-
           return {
             ...prev,
             [peerId]: {
               ...existing,
-              stream: fullStream,
-              isCamOn: hasLiveVideo || existing.isCamOn
+              stream,
+              isCamOn: existing.isCamOn || hasVideo
             }
           };
         });
-
-        // Fast video sync: immediately attach stream to video element
-        setTimeout(() => {
-          const videoEl = remoteVideoRefs.current[peerId];
-          if (videoEl) {
-            videoEl.srcObject = fullStream;
-            videoEl.play().catch(() => {});
-          }
-
-          const audioEl = remoteAudioRefs.current[peerId];
-          if (audioEl) {
-            audioEl.srcObject = fullStream;
-            audioEl.volume = 1.0;
-            audioEl.muted = false;
-            audioEl.play().catch((err) => {
-              console.warn('[LiveMedia] Remote audio autoplay blocked:', err);
-              setAutoplayBlocked(true);
-            });
-          }
-        }, 10);
       };
 
       peerConnectionsRef.current[peerId] = pc;
       return pc;
     },
-    [sendMessage]
+    [getOrCreateRemoteStream, sendMessage]
   );
 
   // Initiate WebRTC Offer (Controlled negotiation)
   const initiateOffer = useCallback(
     async (peerId: string) => {
-      if (!peerId || peerId === currentUserId) return;
+      if (!peerId || String(peerId) === String(currentUserId)) return;
       try {
         const pc = getOrCreatePeerConnection(peerId);
         if (pc.signalingState !== 'stable') return;
 
         makingOfferRef.current[peerId] = true;
 
-        // Ensure transceivers have our latest live tracks
-        const transceivers = pc.getTransceivers();
-        if (localProcessedAudioTrackRef.current) {
-          const at = transceivers.find((t) => t.receiver.track.kind === 'audio');
-          if (at) {
-            await at.sender.replaceTrack(localProcessedAudioTrackRef.current).catch(() => {});
+        // Ensure active local tracks are attached to peer connection senders
+        if (localRawAudioStreamRef.current) {
+          const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
+          if (aTrack) {
+            const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
+            if (sender) {
+              await sender.replaceTrack(aTrack).catch(() => {});
+            }
           }
         }
         if (localVideoStreamRef.current) {
           const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
           if (vTrack) {
-            const vt = transceivers.find((t) => t.receiver.track.kind === 'video');
-            if (vt) {
-              await vt.sender.replaceTrack(vTrack).catch(() => {});
+            const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+            if (sender) {
+              await sender.replaceTrack(vTrack).catch(() => {});
             }
           }
         }
@@ -562,23 +515,23 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       resyncRequested: true
     });
 
-    Object.keys(peers).forEach((peerId) => {
+    Object.keys(peersRef.current).forEach((peerId) => {
       initiateOffer(peerId);
     });
 
     setTimeout(() => {
       setIsSyncingCam(false);
     }, 800);
-  }, [peers, initiateOffer, sendMessage]);
+  }, [initiateOffer, sendMessage]);
 
-  // Toggle Microphone with Noise Cancellation
+  // Toggle Microphone
   const toggleMic = async () => {
     const nextState = !isMicOn;
     setMediaError(null);
 
     try {
       if (nextState) {
-        // High quality microphone constraints with browser-level echo cancellation and noise suppression
+        // High quality microphone constraints with browser native echo cancellation and noise suppression
         const audioConstraints: MediaTrackConstraints = {
           echoCancellation: { ideal: true },
           noiseSuppression: { ideal: true },
@@ -586,33 +539,24 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           channelCount: 1,
           sampleRate: { ideal: 48000 }
         };
-        // Add Chromium-specific noise suppression constraints
-        (audioConstraints as any).googEchoCancellation = true;
-        (audioConstraints as any).googAutoGainControl = true;
-        (audioConstraints as any).googNoiseSuppression = true;
-        (audioConstraints as any).googHighpassFilter = true;
-        (audioConstraints as any).googNoiseReduction = true;
 
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         localRawAudioStreamRef.current = micStream;
 
-        const rawAudioTrack = micStream.getAudioTracks()[0];
-        if (rawAudioTrack) {
-          rawAudioTrack.onended = () => {
+        const audioTrack = micStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = true;
+          audioTrack.onended = () => {
             if (localRawAudioStreamRef.current) {
               localRawAudioStreamRef.current.getAudioTracks().forEach((t) => t.stop());
               localRawAudioStreamRef.current = null;
             }
-            if (localProcessedAudioTrackRef.current) {
-              localProcessedAudioTrackRef.current.stop();
-              localProcessedAudioTrackRef.current = null;
-            }
-            cleanupAudioPipeline();
+            cleanupSpeechDetector();
             Object.values(peerConnectionsRef.current).forEach((pc) => {
               if (!pc || pc.connectionState === 'closed') return;
-              const at = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
-              if (at) {
-                at.sender.replaceTrack(null).catch(() => {});
+              const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
+              if (sender) {
+                sender.replaceTrack(null).catch(() => {});
               }
             });
             setIsMicOn(false);
@@ -624,23 +568,26 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           };
         }
 
-        // Process through Web Audio DSP pipeline with High-pass, Low-pass, Compressor, and Noise Gate
-        const cleanAudioTrack = setupNoiseCancelledAudioPipeline(micStream);
-        cleanAudioTrack.enabled = true;
+        // Setup speech visual level detector
+        setupSpeechDetector(micStream);
 
-        // Attach clean track to all active peer connections seamlessly
-        Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
-          if (!pc || pc.connectionState === 'closed') return;
-          const transceivers = pc.getTransceivers();
-          const at = transceivers.find((t) => t.receiver.track.kind === 'audio');
-          if (at) {
-            at.sender.replaceTrack(cleanAudioTrack).catch(() => {});
+        // Attach pristine audio track to all known peers
+        const peerIds = new Set([
+          ...Object.keys(peersRef.current),
+          ...initialParticipants.map((p) => p.userId).filter((id) => id && String(id) !== String(currentUserId))
+        ]);
+
+        for (const peerId of peerIds) {
+          const pc = getOrCreatePeerConnection(peerId);
+          if (!pc || pc.connectionState === 'closed') continue;
+          const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
+          if (sender) {
+            await sender.replaceTrack(audioTrack).catch(() => {});
           } else {
-            try {
-              pc.addTrack(cleanAudioTrack);
-            } catch {}
+            pc.addTrack(audioTrack, micStream);
+            initiateOffer(peerId);
           }
-        });
+        }
 
         setIsMicOn(true);
       } else {
@@ -649,21 +596,17 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           localRawAudioStreamRef.current.getAudioTracks().forEach((t) => t.stop());
           localRawAudioStreamRef.current = null;
         }
-        if (localProcessedAudioTrackRef.current) {
-          localProcessedAudioTrackRef.current.stop();
-          localProcessedAudioTrackRef.current = null;
-        }
 
-        cleanupAudioPipeline();
+        cleanupSpeechDetector();
 
         // Mute track on peer connections
-        Object.values(peerConnectionsRef.current).forEach((pc) => {
-          if (!pc || pc.connectionState === 'closed') return;
-          const at = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
-          if (at) {
-            at.sender.replaceTrack(null).catch(() => {});
+        for (const pc of Object.values(peerConnectionsRef.current)) {
+          if (!pc || pc.connectionState === 'closed') continue;
+          const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
+          if (sender) {
+            sender.replaceTrack(null).catch(() => {});
           }
-        });
+        }
 
         setIsMicOn(false);
       }
@@ -687,7 +630,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
 
     try {
       if (nextState) {
-        // Fast camera acquisition: request 720p 30fps
+        // High quality 720p 30fps camera stream
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280, max: 1920 },
@@ -700,6 +643,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         localVideoStreamRef.current = videoStream;
 
         if (videoTrack) {
+          videoTrack.enabled = true;
           videoTrack.onended = () => {
             if (localVideoStreamRef.current) {
               localVideoStreamRef.current.getVideoTracks().forEach((t) => t.stop());
@@ -710,9 +654,9 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             }
             Object.values(peerConnectionsRef.current).forEach((pc) => {
               if (!pc || pc.connectionState === 'closed') return;
-              const vt = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
-              if (vt) {
-                vt.sender.replaceTrack(null).catch(() => {});
+              const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+              if (sender) {
+                sender.replaceTrack(null).catch(() => {});
               }
             });
             setIsCamOn(false);
@@ -724,35 +668,33 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           };
         }
 
-        // 1. Immediately bind local camera feed with zero latency
+        // 1. Immediately bind local camera feed
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = videoStream;
           localVideoRef.current.play().catch(() => {});
         }
 
         // 2. Transmit video track to all active peer connections
-        Object.entries(peerConnectionsRef.current).forEach(([peerId, pc]) => {
-          if (!pc || pc.connectionState === 'closed') return;
-          const transceivers = pc.getTransceivers();
-          const vt = transceivers.find((t) => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
-          if (vt) {
-            vt.direction = 'sendrecv';
-            vt.sender.replaceTrack(videoTrack).catch((err) => {
-              console.warn('[LiveMedia] Video replaceTrack error:', err);
-            });
-          } else {
-            try {
-              pc.addTrack(videoTrack, videoStream);
-            } catch {}
-          }
+        const peerIds = new Set([
+          ...Object.keys(peersRef.current),
+          ...initialParticipants.map((p) => p.userId).filter((id) => id && String(id) !== String(currentUserId))
+        ]);
 
-          // Trigger fast renegotiation so remote peer immediately renders video
-          initiateOffer(peerId);
-        });
+        for (const peerId of peerIds) {
+          const pc = getOrCreatePeerConnection(peerId);
+          if (!pc || pc.connectionState === 'closed') continue;
+          const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(videoTrack).catch(() => {});
+          } else {
+            pc.addTrack(videoTrack, videoStream);
+            initiateOffer(peerId);
+          }
+        }
 
         setIsCamOn(true);
       } else {
-        // Stop hardware camera tracks (turns off camera LED)
+        // Stop hardware camera tracks
         if (localVideoStreamRef.current) {
           localVideoStreamRef.current.getVideoTracks().forEach((t) => t.stop());
           localVideoStreamRef.current = null;
@@ -763,13 +705,13 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         }
 
         // Replace track with null on all peers
-        Object.values(peerConnectionsRef.current).forEach((pc) => {
-          if (!pc || pc.connectionState === 'closed') return;
-          const vt = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
-          if (vt) {
-            vt.sender.replaceTrack(null).catch(() => {});
+        for (const pc of Object.values(peerConnectionsRef.current)) {
+          if (!pc || pc.connectionState === 'closed') continue;
+          const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+          if (sender) {
+            sender.replaceTrack(null).catch(() => {});
           }
-        });
+        }
 
         setIsCamOn(false);
       }
@@ -786,167 +728,204 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     }
   };
 
-  // Handle incoming WebSocket media and WebRTC messages
-  useEffect(() => {
-    if (!lastSocketMessage) return;
+  // Toggle Noise Cancellation UI mode
+  const toggleNoiseCancellation = () => {
+    setIsNoiseCancellationOn(!isNoiseCancellationOn);
+  };
 
-    const { type, payload } = lastSocketMessage;
+  // Central Socket Message Dispatcher
+  const handleSocketMessage = useCallback(
+    async (message: any) => {
+      if (!message) return;
+      const { type, payload } = message;
 
-    switch (type) {
-      case 'SESSION_STATE': {
-        const participants = payload?.participants || [];
-        setPeers((prev) => {
-          const next = { ...prev };
-          participants.forEach((p: any) => {
-            const pid = p.userId;
-            if (pid && pid !== currentUserId) {
-              if (!next[pid]) {
-                next[pid] = {
-                  userId: pid,
-                  userName: p.name || 'Collaborator',
-                  userRole: p.role || 'CANDIDATE',
-                  avatarUrl: p.avatarUrl,
-                  isMicOn: false,
-                  isCamOn: false,
-                  isSpeaking: false
-                };
-              } else if (p.avatarUrl) {
-                next[pid].avatarUrl = p.avatarUrl;
-              }
-            }
-          });
-          return next;
-        });
-
-        participants.forEach((p: any) => {
-          if (p.userId && p.userId !== currentUserId) {
-            initiateOffer(p.userId);
-          }
-        });
-        break;
-      }
-
-      case 'USER_JOINED': {
-        const joinedUserId = payload?.userId;
-        if (joinedUserId && joinedUserId !== currentUserId) {
-          setPeers((prev) => ({
-            ...prev,
-            [joinedUserId]: {
-              userId: joinedUserId,
-              userName: payload.name || 'Collaborator',
-              userRole: payload.role || 'CANDIDATE',
-              avatarUrl: payload.avatarUrl,
-              isMicOn: false,
-              isCamOn: false,
-              isSpeaking: false
-            }
-          }));
-
-          // Send current status to newcomer
-          sendMessage('MEDIA_STATUS_UPDATE', {
-            isMicOn: isMicOnRef.current,
-            isCamOn: isCamOnRef.current,
-            isSpeaking: isLocalSpeakingRef.current
-          });
-
-          initiateOffer(joinedUserId);
-        }
-        break;
-      }
-
-      case 'USER_LEFT': {
-        const leftUserId = payload?.userId;
-        if (leftUserId) {
-          if (peerConnectionsRef.current[leftUserId]) {
-            try {
-              peerConnectionsRef.current[leftUserId].close();
-            } catch {}
-            delete peerConnectionsRef.current[leftUserId];
-          }
+      switch (type) {
+        case 'SESSION_STATE': {
+          const participants = payload?.participants || [];
           setPeers((prev) => {
             const next = { ...prev };
-            delete next[leftUserId];
+            participants.forEach((p: any) => {
+              const pid = p.userId;
+              if (pid && String(pid) !== String(currentUserId)) {
+                if (!next[pid]) {
+                  next[pid] = {
+                    userId: pid,
+                    userName: p.name || 'Collaborator',
+                    userRole: p.role || 'CANDIDATE',
+                    avatarUrl: p.avatarUrl,
+                    isMicOn: false,
+                    isCamOn: false,
+                    isSpeaking: false,
+                    stream: remoteStreamsRef.current[pid]
+                  };
+                } else if (p.avatarUrl) {
+                  next[pid].avatarUrl = p.avatarUrl;
+                }
+              }
+            });
             return next;
           });
-        }
-        break;
-      }
 
-      case 'MEDIA_STATUS_UPDATE': {
-        const peerId = payload?.userId;
-        if (peerId && peerId !== currentUserId) {
-          setPeers((prev) => {
-            const existing = prev[peerId] || {
-              userId: peerId,
-              userName: payload.userName || 'Peer',
-              userRole: payload.userRole || 'CANDIDATE',
-              avatarUrl: payload.avatarUrl,
-              isMicOn: false,
-              isCamOn: false,
-              isSpeaking: false
-            };
-            return {
-              ...prev,
-              [peerId]: {
-                ...existing,
-                userName: payload.userName || existing.userName,
-                userRole: payload.userRole || existing.userRole,
-                avatarUrl: payload.avatarUrl || existing.avatarUrl,
-                isMicOn: payload.isMicOn !== undefined ? !!payload.isMicOn : existing.isMicOn,
-                isCamOn: payload.isCamOn !== undefined ? !!payload.isCamOn : existing.isCamOn,
-                isSpeaking: payload.isSpeaking !== undefined ? !!payload.isSpeaking : existing.isSpeaking
+          // Connect to any active participants: only initiate offer if currentUserId < pid (perfect negotiation)
+          participants.forEach((p: any) => {
+            const pid = p.userId;
+            if (pid && String(pid) !== String(currentUserId)) {
+              getOrCreatePeerConnection(pid);
+              if (currentUserId && currentUserId.localeCompare(pid) < 0) {
+                initiateOffer(pid);
               }
-            };
-          });
-
-          // If peer turned on camera or requested resync, ensure peer connection is established
-          if (payload.isCamOn || payload.resyncRequested) {
-            initiateOffer(peerId);
-          }
-        }
-        break;
-      }
-
-      case 'WEBRTC_OFFER': {
-        const { fromUserId, targetUserId, offer } = payload || {};
-        if (targetUserId && targetUserId !== currentUserId) break;
-        if (fromUserId && fromUserId !== currentUserId && offer) {
-          const pc = getOrCreatePeerConnection(fromUserId);
-          const isPolite = currentUserId.localeCompare(fromUserId) > 0;
-          const offerCollision = makingOfferRef.current[fromUserId] || pc.signalingState !== 'stable';
-
-          if (offerCollision) {
-            if (!isPolite) {
-              // Impolite peer ignores colliding offer
-              break;
             }
-            // Polite peer performs rollback to accept incoming offer
-            pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
-          }
+          });
+          break;
+        }
 
-          pc.setRemoteDescription(new RTCSessionDescription(offer))
-            .then(async () => {
-              // Flush any queued ICE candidates
+        case 'USER_JOINED': {
+          const joinedUserId = payload?.userId;
+          if (joinedUserId && String(joinedUserId) !== String(currentUserId)) {
+            setPeers((prev) => ({
+              ...prev,
+              [joinedUserId]: {
+                userId: joinedUserId,
+                userName: payload.name || 'Collaborator',
+                userRole: payload.role || 'CANDIDATE',
+                avatarUrl: payload.avatarUrl,
+                isMicOn: false,
+                isCamOn: false,
+                isSpeaking: false,
+                stream: remoteStreamsRef.current[joinedUserId]
+              }
+            }));
+
+            // Announce current status to newcomer
+            sendMessage('MEDIA_STATUS_UPDATE', {
+              isMicOn: isMicOnRef.current,
+              isCamOn: isCamOnRef.current,
+              isSpeaking: isLocalSpeakingRef.current
+            });
+
+            getOrCreatePeerConnection(joinedUserId);
+            // Deterministic initiator: only initiate if currentUserId < joinedUserId
+            if (currentUserId && currentUserId.localeCompare(joinedUserId) < 0) {
+              initiateOffer(joinedUserId);
+            }
+          }
+          break;
+        }
+
+        case 'USER_LEFT': {
+          const leftUserId = payload?.userId;
+          if (leftUserId) {
+            if (peerConnectionsRef.current[leftUserId]) {
+              try {
+                peerConnectionsRef.current[leftUserId].close();
+              } catch {}
+              delete peerConnectionsRef.current[leftUserId];
+            }
+            if (remoteStreamsRef.current[leftUserId]) {
+              remoteStreamsRef.current[leftUserId].getTracks().forEach((t) => t.stop());
+              delete remoteStreamsRef.current[leftUserId];
+            }
+            setPeers((prev) => {
+              const next = { ...prev };
+              delete next[leftUserId];
+              return next;
+            });
+          }
+          break;
+        }
+
+        case 'MEDIA_STATUS_UPDATE': {
+          const peerId = payload?.userId;
+          if (peerId && String(peerId) !== String(currentUserId)) {
+            setPeers((prev) => {
+              const existing = prev[peerId] || {
+                userId: peerId,
+                userName: payload.userName || 'Peer',
+                userRole: payload.userRole || 'CANDIDATE',
+                avatarUrl: payload.avatarUrl,
+                isMicOn: false,
+                isCamOn: false,
+                isSpeaking: false,
+                stream: remoteStreamsRef.current[peerId]
+              };
+              return {
+                ...prev,
+                [peerId]: {
+                  ...existing,
+                  userName: payload.userName || existing.userName,
+                  userRole: payload.userRole || existing.userRole,
+                  avatarUrl: payload.avatarUrl || existing.avatarUrl,
+                  isMicOn: payload.isMicOn !== undefined ? !!payload.isMicOn : existing.isMicOn,
+                  isCamOn: payload.isCamOn !== undefined ? !!payload.isCamOn : existing.isCamOn,
+                  isSpeaking: payload.isSpeaking !== undefined ? !!payload.isSpeaking : existing.isSpeaking,
+                  stream: existing.stream || remoteStreamsRef.current[peerId]
+                }
+              };
+            });
+
+            // Fast playback trigger when camera or mic turns on
+            if (payload.isCamOn) {
+              const videoEl = remoteVideoRefs.current[peerId];
+              if (videoEl) {
+                videoEl.play().catch(() => {});
+              }
+            }
+
+            // If resync was requested by peer, renegotiate
+            if (payload.resyncRequested) {
+              initiateOffer(peerId);
+            }
+          }
+          break;
+        }
+
+        case 'WEBRTC_OFFER': {
+          const { fromUserId, targetUserId, offer } = payload || {};
+          if (targetUserId && String(targetUserId) !== String(currentUserId)) break;
+          if (fromUserId && String(fromUserId) !== String(currentUserId) && offer) {
+            const pc = getOrCreatePeerConnection(fromUserId);
+            const isPolite = currentUserId.localeCompare(fromUserId) > 0;
+            const offerCollision = makingOfferRef.current[fromUserId] || pc.signalingState !== 'stable';
+
+            if (offerCollision) {
+              if (!isPolite) {
+                // Impolite peer ignores colliding offer
+                return;
+              }
+              // Polite peer awaits rollback
+              try {
+                await pc.setLocalDescription({ type: 'rollback' });
+              } catch (e) {
+                console.warn('[LiveMedia] Rollback error:', e);
+              }
+            }
+
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+              // Drain any queued ICE candidates
               const pending = pendingCandidatesRef.current[fromUserId] || [];
+              pendingCandidatesRef.current[fromUserId] = [];
               for (const c of pending) {
                 await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
               }
-              pendingCandidatesRef.current[fromUserId] = [];
 
-              // Attach active tracks to transceivers before creating answer
-              const transceivers = pc.getTransceivers();
-              if (localProcessedAudioTrackRef.current) {
-                const at = transceivers.find((t) => t.receiver.track.kind === 'audio');
-                if (at) {
-                  await at.sender.replaceTrack(localProcessedAudioTrackRef.current).catch(() => {});
+              // Re-attach active local tracks
+              if (localRawAudioStreamRef.current) {
+                const aTrack = localRawAudioStreamRef.current.getAudioTracks().find((t) => t.readyState === 'live');
+                if (aTrack) {
+                  const sender = pc.getSenders().find((s) => s.track?.kind === 'audio' || (s as any).kind === 'audio');
+                  if (sender) {
+                    await sender.replaceTrack(aTrack).catch(() => {});
+                  }
                 }
               }
               if (localVideoStreamRef.current) {
                 const vTrack = localVideoStreamRef.current.getVideoTracks().find((t) => t.readyState === 'live');
                 if (vTrack) {
-                  const vt = transceivers.find((t) => t.receiver.track.kind === 'video');
-                  if (vt) {
-                    await vt.sender.replaceTrack(vTrack).catch(() => {});
+                  const sender = pc.getSenders().find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+                  if (sender) {
+                    await sender.replaceTrack(vTrack).catch(() => {});
                   }
                 }
               }
@@ -958,51 +937,103 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                 targetUserId: fromUserId,
                 answer
               });
-            })
-            .catch((err) => console.warn('[LiveMedia] WebRTC Answer error:', err));
+            } catch (err) {
+              console.warn('[LiveMedia] WebRTC Answer error:', err);
+            }
+          }
+          break;
         }
-        break;
-      }
 
-      case 'WEBRTC_ANSWER': {
-        const { fromUserId, targetUserId, answer } = payload || {};
-        if (targetUserId && targetUserId !== currentUserId) break;
-        if (fromUserId && fromUserId !== currentUserId && answer) {
-          const pc = peerConnectionsRef.current[fromUserId];
-          if (pc && pc.signalingState === 'have-local-offer') {
-            pc.setRemoteDescription(new RTCSessionDescription(answer))
-              .then(async () => {
+        case 'WEBRTC_ANSWER': {
+          const { fromUserId, targetUserId, answer } = payload || {};
+          if (targetUserId && String(targetUserId) !== String(currentUserId)) break;
+          if (fromUserId && String(fromUserId) !== String(currentUserId) && answer) {
+            const pc = peerConnectionsRef.current[fromUserId];
+            if (pc && pc.signalingState === 'have-local-offer') {
+              try {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+                // Drain queued ICE candidates
                 const pending = pendingCandidatesRef.current[fromUserId] || [];
+                pendingCandidatesRef.current[fromUserId] = [];
                 for (const c of pending) {
                   await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
                 }
-                pendingCandidatesRef.current[fromUserId] = [];
-              })
-              .catch((err) => console.warn('[LiveMedia] SetRemoteDescription error:', err));
+              } catch (err) {
+                console.warn('[LiveMedia] SetRemoteDescription error:', err);
+              }
+            }
           }
+          break;
         }
-        break;
-      }
 
-      case 'WEBRTC_ICE_CANDIDATE': {
-        const { fromUserId, targetUserId, candidate } = payload || {};
-        if (targetUserId && targetUserId !== currentUserId) break;
-        if (fromUserId && fromUserId !== currentUserId && candidate) {
-          const pc = peerConnectionsRef.current[fromUserId];
-          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-          } else {
-            pendingCandidatesRef.current[fromUserId] = pendingCandidatesRef.current[fromUserId] || [];
-            pendingCandidatesRef.current[fromUserId].push(candidate);
+        case 'WEBRTC_ICE_CANDIDATE': {
+          const { fromUserId, targetUserId, candidate } = payload || {};
+          if (targetUserId && String(targetUserId) !== String(currentUserId)) break;
+          if (fromUserId && String(fromUserId) !== String(currentUserId) && candidate) {
+            const pc = peerConnectionsRef.current[fromUserId];
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            } else {
+              pendingCandidatesRef.current[fromUserId] = pendingCandidatesRef.current[fromUserId] || [];
+              pendingCandidatesRef.current[fromUserId].push(candidate);
+            }
           }
+          break;
         }
-        break;
-      }
 
-      default:
-        break;
+        default:
+          break;
+      }
+    },
+    [currentUserId, getOrCreatePeerConnection, initiateOffer, sendMessage]
+  );
+
+  // Subscribe to real-time socket events via direct listener (zero dropped frames/messages)
+  useEffect(() => {
+    if (addSocketListener) {
+      return addSocketListener((msg) => {
+        handleSocketMessage(msg);
+      });
     }
-  }, [lastSocketMessage, currentUserId, getOrCreatePeerConnection, initiateOffer, sendMessage]);
+  }, [addSocketListener, handleSocketMessage]);
+
+  // Fallback support for prop updates
+  useEffect(() => {
+    if (lastSocketMessage && !addSocketListener) {
+      handleSocketMessage(lastSocketMessage);
+    }
+  }, [lastSocketMessage, addSocketListener, handleSocketMessage]);
+
+  // Handle participant updates from parent props
+  useEffect(() => {
+    if (!initialParticipants || initialParticipants.length === 0) return;
+    initialParticipants.forEach((p) => {
+      if (p.userId && String(p.userId) !== String(currentUserId)) {
+        setPeers((prev) => {
+          if (prev[p.userId]) return prev;
+          return {
+            ...prev,
+            [p.userId]: {
+              userId: p.userId,
+              userName: p.name || 'Collaborator',
+              userRole: p.role || 'CANDIDATE',
+              avatarUrl: p.avatarUrl,
+              isMicOn: false,
+              isCamOn: false,
+              isSpeaking: false,
+              stream: remoteStreamsRef.current[p.userId]
+            }
+          };
+        });
+
+        getOrCreatePeerConnection(p.userId);
+        if (currentUserId && currentUserId.localeCompare(p.userId) < 0) {
+          initiateOffer(p.userId);
+        }
+      }
+    });
+  }, [initialParticipants, currentUserId, getOrCreatePeerConnection, initiateOffer]);
 
   // Initial mount: broadcast status and connect to initial participants
   useEffect(() => {
@@ -1012,16 +1043,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       isSpeaking: false
     });
 
-    if (initialParticipants && initialParticipants.length > 0) {
-      initialParticipants.forEach((p) => {
-        if (p.userId && p.userId !== currentUserId) {
-          initiateOffer(p.userId);
-        }
-      });
-    }
-
     return () => {
-      cleanupAudioPipeline();
+      cleanupSpeechDetector();
       if (localRawAudioStreamRef.current) {
         localRawAudioStreamRef.current.getTracks().forEach((track) => track.stop());
         localRawAudioStreamRef.current = null;
@@ -1036,12 +1059,16 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         } catch {}
       });
       peerConnectionsRef.current = {};
+      Object.values(remoteStreamsRef.current).forEach((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
+      });
+      remoteStreamsRef.current = {};
     };
   }, []);
 
   const activePeerList = Object.values(peers);
 
-  // If in docked mini bar mode (keep video elements in DOM with 0 height so WebRTC track decoder never disconnects)
+  // If in docked mini bar mode (keep video & audio elements in DOM with 0 height so WebRTC track decoder never disconnects)
   if (isDocked) {
     return (
       <div className="flex items-center justify-between gap-2 p-2 px-3 rounded-xl bg-slate-900/90 dark:bg-white/[0.04] border border-slate-700/60 dark:border-white/10 text-white backdrop-blur-md shadow-lg text-xs">
@@ -1097,35 +1124,38 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         {/* Hidden persistent video and audio elements so stream decoding never terminates */}
         <div className="sr-only">
           <video ref={localVideoRef} autoPlay playsInline muted />
-          {activePeerList.map((peer) => (
-            <React.Fragment key={peer.userId}>
-              <video
-                ref={(el) => {
-                  remoteVideoRefs.current[peer.userId] = el;
-                  if (el && peer.stream && el.srcObject !== peer.stream) {
-                    el.srcObject = peer.stream;
-                    el.play().catch(() => {});
-                  }
-                }}
-                autoPlay
-                playsInline
-                muted
-              />
-              <audio
-                ref={(el) => {
-                  remoteAudioRefs.current[peer.userId] = el;
-                  if (el && peer.stream && el.srcObject !== peer.stream) {
-                    el.srcObject = peer.stream;
-                    el.volume = 1.0;
-                    el.muted = false;
-                    el.play().catch(() => setAutoplayBlocked(true));
-                  }
-                }}
-                autoPlay
-                playsInline
-              />
-            </React.Fragment>
-          ))}
+          {activePeerList.map((peer) => {
+            const stream = peer.stream || remoteStreamsRef.current[peer.userId];
+            return (
+              <React.Fragment key={peer.userId}>
+                <video
+                  ref={(el) => {
+                    remoteVideoRefs.current[peer.userId] = el;
+                    if (el && stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                      el.play().catch(() => {});
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                <audio
+                  ref={(el) => {
+                    remoteAudioRefs.current[peer.userId] = el;
+                    if (el && stream && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                      el.volume = 1.0;
+                      el.muted = false;
+                      el.play().catch(() => setAutoplayBlocked(true));
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                />
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     );
@@ -1167,7 +1197,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               onClick={resyncCameraFeeds}
               disabled={isSyncingCam}
               className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition cursor-pointer"
-              title="Resync Camera Feeds (Fast WebRTC Refresh)"
+              title="Resync Connection (Fast WebRTC Refresh)"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCam ? 'animate-spin text-indigo-500' : ''}`} />
             </button>
@@ -1243,7 +1273,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                   autoPlay
                   playsInline
                   muted
-                  className={`w-full h-full object-cover ${isCamOn ? 'block scale-x-[-1]' : 'hidden'}`}
+                  className={`w-full h-full object-cover scale-x-[-1] ${isCamOn ? 'block' : 'hidden'}`}
                 />
 
                 {/* Avatar Placeholder when Camera is Off */}
@@ -1283,93 +1313,91 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               </div>
 
               {/* Remote Peer Tiles */}
-              {activePeerList.map((peer) => (
-                <div
-                  key={peer.userId}
-                  className={`relative aspect-video rounded-xl overflow-hidden border ${
-                    peer.isSpeaking
-                      ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                      : 'border-slate-300/40 dark:border-white/10'
-                  } bg-slate-950 flex flex-col items-center justify-center transition-all duration-200 shadow-inner`}
-                >
-                  {/* Remote Video Stream Element */}
-                  <video
-                    ref={(el) => {
-                      remoteVideoRefs.current[peer.userId] = el;
-                      if (el && peer.stream) {
-                        if (el.srcObject !== peer.stream) {
-                          el.srcObject = peer.stream;
+              {activePeerList.map((peer) => {
+                const stream = peer.stream || remoteStreamsRef.current[peer.userId];
+                return (
+                  <div
+                    key={peer.userId}
+                    className={`relative aspect-video rounded-xl overflow-hidden border ${
+                      peer.isSpeaking
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                        : 'border-slate-300/40 dark:border-white/10'
+                    } bg-slate-950 flex flex-col items-center justify-center transition-all duration-200 shadow-inner`}
+                  >
+                    {/* Remote Video Stream Element */}
+                    <video
+                      ref={(el) => {
+                        remoteVideoRefs.current[peer.userId] = el;
+                        if (el && stream && el.srcObject !== stream) {
+                          el.srcObject = stream;
                         }
-                        el.play().catch(() => {});
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover ${peer.isCamOn && peer.stream ? 'block' : 'hidden'}`}
-                  />
+                        if (el && peer.isCamOn) {
+                          el.play().catch(() => {});
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover ${peer.isCamOn ? 'block' : 'hidden'}`}
+                    />
 
-                  {/* Dedicated Remote Audio Element */}
-                  <audio
-                    ref={(el) => {
-                      remoteAudioRefs.current[peer.userId] = el;
-                      if (el && peer.stream && el.srcObject !== peer.stream) {
-                        el.srcObject = peer.stream;
-                        el.volume = 1.0;
-                        el.muted = false;
-                        el.play().catch(() => setAutoplayBlocked(true));
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    className="sr-only"
-                  />
+                    {/* Dedicated Remote Audio Element (Unmuted for crisp live voice) */}
+                    <audio
+                      ref={(el) => {
+                        remoteAudioRefs.current[peer.userId] = el;
+                        if (el && stream && el.srcObject !== stream) {
+                          el.srcObject = stream;
+                        }
+                        if (el) {
+                          el.volume = 1.0;
+                          el.muted = false;
+                          el.play().catch(() => setAutoplayBlocked(true));
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      className="sr-only"
+                    />
 
-                  {/* Remote Avatar Placeholder */}
-                  {(!peer.isCamOn || !peer.stream) && (
-                    <div className="flex flex-col items-center justify-center p-2 text-center">
-                      <UserAvatar
-                        name={peer.userName}
-                        avatarUrl={peer.avatarUrl}
-                        size="md"
-                        isOnline={true}
-                      />
-                      <span className="text-[10px] text-slate-400 mt-1.5 font-medium flex items-center gap-1">
-                        {peer.isCamOn ? (
-                          <>
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
-                            <span>Syncing Video...</span>
-                          </>
-                        ) : (
-                          <span>{peer.userName}</span>
-                        )}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Top Badge: Peer Name */}
-                  <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
-                      {peer.userName}
-                    </span>
-                  </div>
-
-                  {/* Bottom Badges */}
-                  <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-                    {peer.isSpeaking && (
-                      <div className="flex items-end gap-0.5 h-3 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
-                        <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
-                        <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce" />
-                        <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
+                    {/* Remote Avatar Placeholder */}
+                    {!peer.isCamOn && (
+                      <div className="flex flex-col items-center justify-center p-2 text-center">
+                        <UserAvatar
+                          name={peer.userName}
+                          avatarUrl={peer.avatarUrl}
+                          size="md"
+                          isOnline={true}
+                        />
+                        <span className="text-[10px] text-slate-400 mt-1.5 font-medium flex items-center gap-1">
+                          <span>{peer.userName} (Camera Off)</span>
+                        </span>
                       </div>
                     )}
 
-                    <span className={`p-1 rounded-md text-[10px] ${peer.isMicOn ? 'bg-emerald-500/80 text-white' : 'bg-slate-700/80 text-white'}`}>
-                      {peer.isMicOn ? <Mic className="w-2.5 h-2.5" /> : <MicOff className="w-2.5 h-2.5 text-rose-300" />}
-                    </span>
+                    {/* Top Badge: Peer Name */}
+                    <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
+                        {peer.userName}
+                      </span>
+                    </div>
+
+                    {/* Bottom Badges */}
+                    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
+                      {peer.isSpeaking && (
+                        <div className="flex items-end gap-0.5 h-3 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50">
+                          <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
+                          <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce" />
+                          <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse" />
+                        </div>
+                      )}
+
+                      <span className={`p-1 rounded-md text-[10px] ${peer.isMicOn ? 'bg-emerald-500/80 text-white' : 'bg-slate-700/80 text-white'}`}>
+                        {peer.isMicOn ? <Mic className="w-2.5 h-2.5" /> : <MicOff className="w-2.5 h-2.5 text-rose-300" />}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Waiting Notice if Solo */}
@@ -1425,7 +1453,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               <ShieldCheck className={`w-3.5 h-3.5 ${isNoiseCancellationOn ? 'text-emerald-500' : 'text-slate-400'}`} />
               <span>AI Noise Cancellation</span>
               <span className="px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold uppercase">
-                Active
+                {isNoiseCancellationOn ? 'Active' : 'Off'}
               </span>
             </div>
 
@@ -1436,9 +1464,9 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                   ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30'
                   : 'bg-slate-200 dark:bg-white/10 text-slate-500 hover:text-slate-700'
               }`}
-              title="Toggle Web Audio DSP Noise Cancellation (Removes background fans, room echo & hiss)"
+              title="Toggle Noise Cancellation (Echo Cancellation & Ambient Filtering)"
             >
-              {isNoiseCancellationOn ? 'High (On)' : 'Standard'}
+              {isNoiseCancellationOn ? 'On' : 'Off'}
             </button>
           </div>
         </div>

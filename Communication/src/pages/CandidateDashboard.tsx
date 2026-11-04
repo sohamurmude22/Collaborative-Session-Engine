@@ -402,7 +402,7 @@ export const CandidateDashboard: React.FC = () => {
     }
   }, [fetchFiles, fetchQuestions, fetchSessionDetails, rightTab, user?.id, navigate]);
 
-  const { isConnected, sendMessage } = useSessionSocket({
+  const { isConnected, sendMessage, addMessageListener } = useSessionSocket({
     sessionId,
     onMessage: handleWsMessage
   });
@@ -1245,12 +1245,13 @@ export const CandidateDashboard: React.FC = () => {
           <div className="p-3 shrink-0 border-b border-slate-200/80 dark:border-white/10">
             <LiveMediaSession
               sessionId={sessionId!}
-              currentUserId={user?.id || ''}
+              currentUserId={user?.id || (user as any)?._id || ''}
               currentUserName={user?.name || 'Candidate'}
               currentUserRole={user?.role || 'CANDIDATE'}
               currentUserAvatarUrl={user?.avatarUrl}
               sendMessage={sendMessage}
               lastSocketMessage={lastWsMsg}
+              addSocketListener={addMessageListener}
               initialParticipants={initialParticipants}
               isDocked={false}
             />
