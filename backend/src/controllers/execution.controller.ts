@@ -50,6 +50,15 @@ export const runCode = async (req: AuthRequest, res: Response): Promise<void> =>
     if (fileId) {
       const file = await File.findById(fileId);
       if (file) {
+        const isInterviewer = PermissionEngine.isInterviewerOrAdmin(user, session);
+        if (file.permission === 'LOCKED' && !isInterviewer) {
+          res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'This file is locked and cannot be executed while locked.' }
+          });
+          return;
+        }
+
         // Must be allowed to view file to run it
         const viewCheck = PermissionEngine.canViewFile(user, session, file);
         if (!viewCheck.allowed) {

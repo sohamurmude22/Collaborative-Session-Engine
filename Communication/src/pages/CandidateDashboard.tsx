@@ -429,11 +429,13 @@ export const CandidateDashboard: React.FC = () => {
   const isMasterLocked = files.length > 0 && files.every((f) => f.permission === 'LOCKED');
   const isFileLocked = activeFile?.permission === 'LOCKED' || isMasterLocked;
   const isFileReadonly = activeFile?.permission === 'VISIBLE_READONLY';
-  const isEditable = !isBlocked && !isScreenLocked && activeFile?.permission === 'VISIBLE_EDITABLE' && session?.status !== 'COMPLETED' && session?.status !== 'PAUSED' && !isMasterLocked;
+  // Screen is frozen for candidate/attendee if host engaged screen lock or locked the active file / all files
+  const isScreenFrozen = !isCreator && (isScreenLocked || isFileLocked || isMasterLocked);
+  const isEditable = !isBlocked && !isScreenFrozen && !isFileReadonly && activeFile?.permission === 'VISIBLE_EDITABLE' && session?.status !== 'COMPLETED' && session?.status !== 'PAUSED';
 
   // Editor change handler with Line Timestamp History & Millisecond Burst / Anti-Cheat
   const handleEditorChange = (value?: string) => {
-    if (!activeFile || value === undefined || isBlocked || !isEditable) return;
+    if (!activeFile || value === undefined || isBlocked || isScreenFrozen || !isEditable) return;
     activeFile.content = value;
 
     const now = Date.now();
@@ -586,9 +588,9 @@ export const CandidateDashboard: React.FC = () => {
     }
   };
 
-  // Run C++ or other language code
+  // Run C++ or other language code (Allowed in Read Mode; strictly blocked in Lock Mode)
   const handleRunCode = async () => {
-    if (!sessionId || !activeFile) return;
+    if (!sessionId || !activeFile || isScreenFrozen || isBlocked) return;
     setExecuting(true);
     setExecResult(null);
 
@@ -693,23 +695,31 @@ export const CandidateDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Full-Screen Screen Locked Overlay Modal */}
-      {isScreenLocked && !isBlocked && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <Lock className="w-8 h-8" />
+      {/* Full-Screen Frozen & Locked Screen Barrier Overlay */}
+      {isScreenFrozen && !isBlocked && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none cursor-not-allowed"
+          style={{ userSelect: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="bg-slate-900 border-2 border-cyan-500/70 rounded-3xl max-w-md w-full p-6 text-center shadow-[0_0_50px_rgba(6,182,212,0.35)] pointer-events-auto">
+            <div className="w-16 h-16 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center mx-auto mb-4 animate-pulse shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+              <Lock className="w-8 h-8 text-cyan-300" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Screen Locked by Interviewer</h2>
-            <p className="text-xs text-amber-300 font-semibold mb-4 leading-relaxed">
-              {screenLockedReason || 'The interviewer has locked your session screen and editor.'}
+            <span className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 inline-block mb-3">
+              SCREEN FROZEN &amp; LOCKED
+            </span>
+            <h2 className="text-xl font-bold text-white mb-2">Screen Locked by Host</h2>
+            <p className="text-xs text-cyan-200/90 font-semibold mb-3 leading-relaxed">
+              {screenLockedReason || (isFileLocked ? 'Active file has been locked by interviewer. Your screen is frozen.' : 'The interviewer has locked your session screen and editor.')}
             </p>
-            <p className="text-xs text-slate-400 mb-6">
-              All editor inputs and interactions are temporarily suspended. Please await instructions from your interviewer.
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              All code editing, execution, and user actions on screen are currently frozen by the host. You cannot type, run code, or interact with screen elements until the interviewer unlocks the session.
             </p>
             <button
               onClick={() => setShowLeaveConfirm(true)}
-              className="py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-xl text-xs border border-slate-700 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+              className="py-2 px-4 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-xl text-xs border border-slate-700 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
             >
               <LogOut className="w-3.5 h-3.5" /> Leave Session
             </button>
@@ -900,12 +910,12 @@ export const CandidateDashboard: React.FC = () => {
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {isLocked ? (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1">
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 flex items-center gap-1">
                               <Lock className="w-2.5 h-2.5" /> LOCKED
                             </span>
                           ) : isReadonly ? (
                             <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 flex items-center gap-1">
-                              <Eye className="w-2.5 h-2.5" /> READ-ONLY
+                              <Eye className="w-2.5 h-2.5" /> READ &amp; RUN
                             </span>
                           ) : (
                             <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
@@ -1035,12 +1045,12 @@ export const CandidateDashboard: React.FC = () => {
               )}
 
               {isFileLocked ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                  <Lock className="w-3 h-3 text-rose-500" /> Locked
+                <span className="flex items-center gap-1 text-[10px] font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+                  <Lock className="w-3 h-3 text-cyan-500" /> Locked &amp; Frozen
                 </span>
               ) : isFileReadonly ? (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                  <Eye className="w-3 h-3 text-amber-500" /> Read-Only
+                  <Eye className="w-3 h-3 text-amber-500" /> Read &amp; Run Mode
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
@@ -1099,11 +1109,24 @@ export const CandidateDashboard: React.FC = () => {
 
               <button
                 onClick={handleRunCode}
-                disabled={executing || !activeFile}
-                className="flex items-center gap-1.5 px-3.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 shadow-xs shadow-emerald-600/25 cursor-pointer"
+                disabled={executing || !activeFile || isScreenFrozen || isBlocked}
+                className={`flex items-center gap-1.5 px-3.5 py-1 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer ${
+                  isScreenFrozen || isBlocked || !activeFile
+                    ? 'opacity-40 cursor-not-allowed bg-slate-700'
+                    : isFileReadonly
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 shadow-amber-600/25 ring-1 ring-amber-400/40'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/25'
+                }`}
+                title={
+                  isScreenFrozen
+                    ? 'Screen is locked. Code execution is disabled.'
+                    : isFileReadonly
+                    ? 'Read Mode: You can execute this code without editing.'
+                    : 'Compile and run C++ code'
+                }
               >
                 <Play className="w-3 h-3 fill-current" />
-                <span>{executing ? 'Compiling...' : 'Run C++'}</span>
+                <span>{executing ? 'Compiling...' : isFileReadonly ? 'Run Code (Read Mode)' : 'Run C++'}</span>
               </button>
 
               <button
@@ -1115,6 +1138,19 @@ export const CandidateDashboard: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Read Mode Notice Banner */}
+          {isFileReadonly && !isScreenFrozen && (
+            <div className="h-7 px-3 bg-amber-500/10 border-b border-amber-500/25 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 shrink-0">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Eye className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span><strong>Read Mode Active:</strong> You can read and run this code. Code editing is disabled.</span>
+              </span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                Read &amp; Run Only
+              </span>
+            </div>
+          )}
 
           {/* Monaco Editor Canvas */}
           <div className="flex-1 relative overflow-hidden bg-white dark:bg-[#090d16]">
@@ -1130,7 +1166,7 @@ export const CandidateDashboard: React.FC = () => {
                   fontSize: editorFontSize,
                   lineNumbers: 'on',
                   minimap: { enabled: false },
-                  readOnly: !isEditable || isBlocked || isScreenLocked,
+                  readOnly: !isEditable || isBlocked || isScreenFrozen || isFileReadonly,
                   scrollBeyondLastLine: false,
                   wordWrap: 'on',
                   automaticLayout: true,

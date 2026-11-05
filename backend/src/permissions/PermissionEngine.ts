@@ -311,6 +311,14 @@ export class PermissionEngine {
       };
     }
 
+    if (session.isScreenLocked && !this.isInterviewerOrAdmin(user, session)) {
+      return {
+        allowed: false,
+        reason: 'Session screen is frozen and locked by the interviewer. Execution is disabled.',
+        statusCode: 403
+      };
+    }
+
     return { allowed: true };
   }
 

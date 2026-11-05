@@ -164,6 +164,8 @@ export const InterviewerDashboard: React.FC = () => {
 
   // Derived Master Lock Status: true if all files are locked
   const isMasterLocked = files.length > 0 && files.every((f) => f.permission === 'LOCKED');
+  const isFileLocked = activeFile?.permission === 'LOCKED' || isMasterLocked;
+  const isFileReadonly = activeFile?.permission === 'VISIBLE_READONLY';
 
   // Check if current user is the session creator / host
   const currentUid = user?.id || (user as any)?._id;
@@ -175,6 +177,9 @@ export const InterviewerDashboard: React.FC = () => {
       ((session.interviewerId as any)?.toString?.() === currentUid?.toString?.())
     )
   );
+
+  // Screen is frozen for non-creators if host locked screen, active file, or master lock
+  const isScreenFrozen = !isCreator && (isScreenLocked || isFileLocked || isMasterLocked);
 
   const { theme, themeConfig } = useTheme();
 
@@ -1214,9 +1219,9 @@ ${privateNotes || 'No notes added.'}`;
     }
   };
 
-  // Run Code
+  // Run Code (Allowed in Read Mode; blocked if screen frozen)
   const handleRunCode = async () => {
-    if (!sessionId || !activeFile) return;
+    if (!sessionId || !activeFile || isScreenFrozen) return;
     setExecuting(true);
     setShowBottomConsole(true);
     setExecResult(null);
@@ -2226,7 +2231,7 @@ ${privateNotes || 'No notes added.'}`;
                         ? 'bg-amber-600 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
-                    title="Set file to Read-Only for candidate (observation mode)"
+                    title="Read Mode: Candidate can ONLY read and run code (editing disabled)"
                   >
                     <Eye className="w-3 h-3" />
                     <span>Read Only</span>
@@ -2239,7 +2244,7 @@ ${privateNotes || 'No notes added.'}`;
                         ? 'bg-rose-600 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
-                    title="Freeze and lock file against candidate edits"
+                    title="Lock Mode: Freeze candidate screen and block all candidate actions"
                   >
                     <Lock className="w-3 h-3" />
                     <span>File Lock</span>
@@ -2255,7 +2260,7 @@ ${privateNotes || 'No notes added.'}`;
                     ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs ring-2 ring-amber-500/30'
                     : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
                 }`}
-                title={isScreenLocked ? 'Unlock candidate screen' : 'Lock candidate screen and freeze interaction'}
+                title={isScreenLocked ? 'Unlock candidate screen' : 'Lock candidate screen and freeze all interactions'}
               >
                 {isScreenLocked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-slate-600" />}
                 <span>{isScreenLocked ? 'Screen Locked' : 'Lock Screen'}</span>
@@ -2332,12 +2337,12 @@ ${privateNotes || 'No notes added.'}`;
                 )}
                 {activeFile.permission === 'VISIBLE_READONLY' && (
                   <span className="text-amber-700 font-medium flex items-center gap-1">
-                    <Eye className="w-3 h-3 text-amber-600" /> Read-Only observation mode active.
+                    <Eye className="w-3 h-3 text-amber-600" /> Read Mode active: Candidate can ONLY read and run code.
                   </span>
                 )}
                 {activeFile.permission === 'LOCKED' && (
                   <span className="text-rose-700 font-medium flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-rose-600" /> File is locked. Candidate edits rejected by engine.
+                    <Lock className="w-3 h-3 text-rose-600" /> Lock Mode active: Candidate screen is frozen; candidate cannot do anything on screen.
                   </span>
                 )}
               </div>
@@ -2363,7 +2368,7 @@ ${privateNotes || 'No notes added.'}`;
                   scrollBeyondLastLine: false,
                   wordWrap: 'on',
                   automaticLayout: true,
-                  readOnly: false, // Interviewer can ALWAYS edit
+                  readOnly: !isCreator && (isScreenFrozen || isFileReadonly), // Interviewer can edit, non-creator obeys freeze & read-only
                   tabSize: 2,
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
                 }}
@@ -3526,6 +3531,38 @@ ${privateNotes || 'No notes added.'}`;
                 <span>{blockLoading ? 'Suspending Access...' : 'Block Candidate Now'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Frozen & Locked Screen Barrier Overlay for Non-Creators */}
+      {isScreenFrozen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto select-none cursor-not-allowed"
+          style={{ userSelect: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="bg-slate-900 border-2 border-cyan-500/70 rounded-3xl max-w-md w-full p-6 text-center shadow-[0_0_50px_rgba(6,182,212,0.35)] pointer-events-auto">
+            <div className="w-16 h-16 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center mx-auto mb-4 animate-pulse shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+              <Lock className="w-8 h-8 text-cyan-300" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 inline-block mb-3">
+              SCREEN FROZEN &amp; LOCKED
+            </span>
+            <h2 className="text-xl font-bold text-white mb-2">Screen Locked by Host</h2>
+            <p className="text-xs text-cyan-200/90 font-semibold mb-3 leading-relaxed">
+              {isFileLocked ? 'Active file has been locked by the host. Your screen is frozen.' : 'The session host has locked your session screen and editor.'}
+            </p>
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              All code editing, execution, and user actions on screen are currently frozen by the host. You cannot type, run code, or interact with screen elements until the host unlocks the session.
+            </p>
+            <button
+              onClick={() => setShowLeaveConfirm(true)}
+              className="py-2 px-4 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-xl text-xs border border-slate-700 transition cursor-pointer flex items-center justify-center gap-2 mx-auto"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Leave Session
+            </button>
           </div>
         </div>
       )}
