@@ -214,7 +214,6 @@ export const InterviewerDashboard: React.FC = () => {
   const [showBottomConsole, setShowBottomConsole] = useState(true);
   const [showTimestampDrawer, setShowTimestampDrawer] = useState(false);
   const [editorFontSize, setEditorFontSize] = useState<number>(16);
-  const [mobileTab, setMobileTab] = useState<'editor' | 'controls' | 'media' | 'chat' | 'output'>('editor');
 
   // Pre-load participant metadata for zero-latency peer connection & avatar cards
   const initialParticipants = useMemo(() => {
@@ -1280,7 +1279,7 @@ ${privateNotes || 'No notes added.'}`;
   }
 
   return (
-    <div className={`h-[calc(100vh-64px)] flex flex-col ${themeConfig.bgPage} text-slate-800 overflow-hidden font-sans transition-colors duration-200`}>
+    <div className={`h-full flex-1 flex flex-col ${themeConfig.bgPage} text-slate-800 overflow-hidden font-sans transition-colors duration-200`}>
       {/* Completed Session Notification Banner */}
       {session?.status === 'COMPLETED' && (
         <div className="bg-slate-900 text-slate-100 px-4 py-2 text-xs flex items-center justify-between z-30 shadow-md">
@@ -1488,6 +1487,42 @@ ${privateNotes || 'No notes added.'}`;
             <span className="hidden sm:inline">Rubric</span>
           </button>
 
+          {/* Layout Mode Selector */}
+          <div className="hidden xl:flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+            <button
+              onClick={() => applyLayoutMode('standard')}
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'standard' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Standard
+            </button>
+            <button
+              onClick={() => applyLayoutMode('focus')}
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'focus' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Focus Code
+            </button>
+            <button
+              onClick={() => applyLayoutMode('split')}
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'split' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Files & Code
+            </button>
+            <button
+              onClick={() => applyLayoutMode('proctor')}
+              className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                layoutMode === 'proctor' ? 'bg-white dark:bg-white/10 shadow-xs text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Proctor View
+            </button>
+          </div>
+
           {/* Theme Selector */}
           <ThemeSelector compact={true} />
 
@@ -1533,25 +1568,16 @@ ${privateNotes || 'No notes added.'}`;
       </div>
 
       {/* Main 3-Column Working Interface */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative w-full min-h-0">
         {/* Left Column: Lock Permission Engine, File Matrix & Progressive Reveal Controls */}
         <div
           className={`${
-            isLeftSidebarOpen ? 'w-80 xl:w-88' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
-          } ${
-            mobileTab === 'controls' ? 'fixed inset-0 z-40 w-full' : 'hidden lg:flex'
-          } border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col overflow-y-auto shrink-0 shadow-xs transition-all duration-200`}
+            isLeftSidebarOpen ? 'w-64 md:w-72 xl:w-80 flex' : 'hidden'
+          } border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col overflow-y-auto shrink-0 shadow-xs`}
         >
           {/* Header with collapse button */}
           <div className="h-10 px-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setMobileTab('editor')}
-                className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
-                title="Back to Editor"
-              >
-                <X className="w-4 h-4" />
-              </button>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-600" />
                 Control Center
@@ -1989,9 +2015,9 @@ ${privateNotes || 'No notes added.'}`;
         )}
       </div>
 
-        {/* Collapsed Left Sidebar Rail (Desktop only) */}
+        {/* Collapsed Left Sidebar Rail */}
         {!isLeftSidebarOpen && (
-          <div className={`hidden lg:flex w-12 border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
+          <div className={`flex w-12 border-r ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs`}>
             <button
               onClick={() => setIsLeftSidebarOpen(true)}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer shadow-2xs"
@@ -2033,11 +2059,7 @@ ${privateNotes || 'No notes added.'}`;
         )}
 
         {/* Center Column: Live Collaborative Monaco Editor */}
-        <div
-          className={`flex-1 flex flex-col bg-white overflow-hidden min-w-0 ${
-            mobileTab !== 'editor' && mobileTab !== 'output' ? 'hidden lg:flex' : 'flex'
-          }`}
-        >
+        <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 h-full">
           {/* Row 1: VS Code-Style Horizontal File Tab Bar */}
           <div className="h-10 border-b border-slate-200 bg-slate-100/80 px-2 flex items-center justify-between shrink-0 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1 min-w-0">
@@ -2444,21 +2466,12 @@ ${privateNotes || 'No notes added.'}`;
         {/* Right Column: Persistent Voice Session & Chat / Proctoring */}
         <div
           className={`${
-            isRightSidebarOpen ? 'w-80 md:w-92' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
-          } ${
-            mobileTab === 'media' || mobileTab === 'chat' ? 'fixed inset-0 z-40 w-full md:w-92' : 'hidden lg:flex'
-          } border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
+            isRightSidebarOpen ? 'w-72 md:w-80 xl:w-92 flex' : 'hidden'
+          } border-l ${themeConfig.border} ${themeConfig.bgCard} flex flex-col overflow-hidden shrink-0`}
         >
           {/* Right Column Header */}
           <div className="h-10 px-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setMobileTab('editor')}
-                className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700 hover:text-black mr-1 cursor-pointer"
-                title="Back to Editor"
-              >
-                <X className="w-4 h-4" />
-              </button>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
                 Live Video & Voice Call
@@ -2495,7 +2508,6 @@ ${privateNotes || 'No notes added.'}`;
             <button
               onClick={() => {
                 setRightTab('chat');
-                setMobileTab('chat');
                 setUnreadChatCount(0);
               }}
               className={`relative flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -2516,7 +2528,6 @@ ${privateNotes || 'No notes added.'}`;
             <button
               onClick={() => {
                 setRightTab('proctor');
-                setMobileTab('media');
               }}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 rightTab === 'proctor'
@@ -2689,9 +2700,9 @@ ${privateNotes || 'No notes added.'}`;
             )}
           </div>
 
-        {/* Collapsed Right Sidebar Rail (Desktop only) */}
+        {/* Collapsed Right Sidebar Rail */}
         {!isRightSidebarOpen && (
-          <div className={`hidden lg:flex w-12 border-l ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs transition-all duration-200`}>
+          <div className={`flex w-12 border-l ${themeConfig.border} ${themeConfig.bgCard} flex-col items-center py-3 gap-3 shrink-0 shadow-xs`}>
             <button
               onClick={() => setIsRightSidebarOpen(true)}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer shadow-2xs"
@@ -2725,75 +2736,6 @@ ${privateNotes || 'No notes added.'}`;
             </button>
           </div>
         )}
-      </div>
-
-      {/* Mobile Responsive Navigation Bottom Dock Bar (< 1024px) */}
-      <div className="lg:hidden h-14 border-t border-slate-200 bg-white px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
-        <button
-          onClick={() => setMobileTab('editor')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'editor' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
-          }`}
-        >
-          <Code2 className="w-4 h-4" />
-          <span>Editor</span>
-        </button>
-
-        <button
-          onClick={() => setMobileTab('controls')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'controls' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Controls</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setIsRightSidebarOpen(true);
-            setMobileTab('media');
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
-            mobileTab === 'media' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
-          }`}
-        >
-          <Radio className="w-4 h-4 text-emerald-600" />
-          <span>Live Call</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setRightTab('chat');
-            setIsRightSidebarOpen(true);
-            setMobileTab('chat');
-            setUnreadChatCount(0);
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
-            mobileTab === 'chat' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>Chat</span>
-          {unreadChatCount > 0 && (
-            <span className="absolute top-1 right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] flex items-center justify-center font-bold">
-              {unreadChatCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => {
-            setShowBottomConsole(true);
-            setMobileTab('output');
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'output' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'
-          }`}
-        >
-          <Terminal className="w-4 h-4" />
-          <span>Output</span>
-        </button>
       </div>
 
       {/* Confirmation Modal: End Session */}

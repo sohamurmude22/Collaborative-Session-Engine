@@ -86,7 +86,6 @@ export const CandidateDashboard: React.FC = () => {
   const [leftTab, setLeftTab] = useState<'files' | 'storage' | 'questions'>('files');
   const [rightTab, setRightTab] = useState<'media' | 'chat'>('media');
   const [editorFontSize, setEditorFontSize] = useState<number>(16);
-  const [mobileTab, setMobileTab] = useState<'editor' | 'files' | 'media' | 'chat' | 'output'>('editor');
 
   // Pre-load participant metadata for zero-latency peer connection & avatar cards
   const initialParticipants = useMemo(() => {
@@ -651,7 +650,7 @@ export const CandidateDashboard: React.FC = () => {
   }
 
   return (
-    <div className={`h-[calc(100vh-64px)] flex flex-col ${themeConfig.bgPage} text-slate-800 overflow-hidden font-sans transition-colors duration-200 relative`}>
+    <div className={`h-full flex-1 flex flex-col ${themeConfig.bgPage} text-slate-800 overflow-hidden font-sans transition-colors duration-200 relative`}>
       {/* Completed Session Notification Banner */}
       {session?.status === 'COMPLETED' && (
         <div className="bg-slate-900 text-slate-100 px-4 py-2.5 text-xs flex items-center justify-between z-30 shadow-md">
@@ -836,24 +835,15 @@ export const CandidateDashboard: React.FC = () => {
       </div>
 
       {/* Main Workspace Body */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative w-full min-h-0">
         {/* Left Column: Files / Shared File Storage / Problems */}
         <div
           className={`${
-            showLeftSidebar ? 'w-72 md:w-80' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
-          } ${
-            mobileTab === 'files' ? 'fixed inset-0 z-40 w-full' : 'hidden lg:flex'
-          } border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex-col shrink-0 transition-all duration-200`}
+            showLeftSidebar ? 'w-64 md:w-72 xl:w-80 flex' : 'hidden'
+          } border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex-col shrink-0`}
         >
           {/* Left Column Tabs */}
           <div className="p-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center gap-1">
-            <button
-              onClick={() => setMobileTab('editor')}
-              className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
-              title="Back to Editor"
-            >
-              <X className="w-4 h-4" />
-            </button>
             <button
               onClick={() => setLeftTab('files')}
               className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -947,12 +937,45 @@ export const CandidateDashboard: React.FC = () => {
             )}
           </div>
 
+        {/* Collapsed Left Sidebar Rail */}
+        {!showLeftSidebar && (
+          <div className="flex w-12 border-r border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex-col items-center py-3 gap-3 shrink-0">
+            <button
+              onClick={() => setShowLeftSidebar(true)}
+              className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition cursor-pointer shadow-xs"
+              title="Expand left panel (Files & Storage)"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+            <div className="w-6 h-[1px] bg-slate-200 dark:bg-white/10" />
+            <button
+              onClick={() => {
+                setShowLeftSidebar(true);
+                setLeftTab('files');
+              }}
+              className="relative p-2 rounded-lg text-slate-500 hover:text-indigo-500 transition cursor-pointer"
+              title={`Files (${files.length})`}
+            >
+              <FileCode className="w-4 h-4" />
+              <span className="absolute -top-1 -right-1 text-[9px] font-bold w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center">
+                {files.length}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                setShowLeftSidebar(true);
+                setLeftTab('storage');
+              }}
+              className="p-2 rounded-lg text-slate-500 hover:text-indigo-500 transition cursor-pointer"
+              title="Shared Storage"
+            >
+              <HardDrive className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Center Column: Monaco Editor & C++ Compiler Output Console */}
-        <div
-          className={`flex-1 flex flex-col ${themeConfig.bgCard} relative overflow-hidden transition-colors duration-200 min-w-0 ${
-            mobileTab !== 'editor' && mobileTab !== 'output' ? 'hidden lg:flex' : 'flex'
-          }`}
-        >
+        <div className={`flex-1 flex flex-col ${themeConfig.bgCard} relative overflow-hidden transition-colors duration-200 min-w-0 h-full`}>
           {/* Editor Header Toolbar */}
           <div className="h-10 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.02] px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
@@ -1210,22 +1233,13 @@ export const CandidateDashboard: React.FC = () => {
         {/* Right Column: Live Camera & Microphone Video Feed + In-Session Live Chat */}
         <div
           className={`${
-            showRightSidebar ? 'w-80 md:w-96' : 'w-0 overflow-hidden pointer-events-none opacity-0 border-none'
-          } ${
-            mobileTab === 'media' || mobileTab === 'chat' ? 'fixed inset-0 z-40 w-full md:w-96' : 'hidden lg:flex'
-          } border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0 transition-all duration-200`}
+            showRightSidebar ? 'w-72 md:w-80 xl:w-92 flex' : 'hidden'
+          } border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex flex-col overflow-hidden shrink-0`}
         >
           {/* Right Tabs: Live Media vs In-Session Chat */}
           {/* Right Column Header */}
           <div className="h-10 px-3 border-b border-slate-200/80 dark:border-white/10 bg-slate-100/60 dark:bg-black/30 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setMobileTab('editor')}
-                className="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white mr-1 cursor-pointer"
-                title="Back to Editor"
-              >
-                <X className="w-4 h-4" />
-              </button>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
                 Live Video & Voice Call
@@ -1262,7 +1276,6 @@ export const CandidateDashboard: React.FC = () => {
             <button
               onClick={() => {
                 setRightTab('media');
-                setMobileTab('media');
               }}
               className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                 rightTab === 'media'
@@ -1277,7 +1290,6 @@ export const CandidateDashboard: React.FC = () => {
             <button
               onClick={() => {
                 setRightTab('chat');
-                setMobileTab('chat');
                 setUnreadChatCount(0);
               }}
               className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 relative ${
@@ -1369,76 +1381,49 @@ export const CandidateDashboard: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Mobile Responsive Navigation Bottom Dock Bar (< 1024px) */}
-      <div className="lg:hidden h-14 border-t border-slate-200/80 dark:border-white/10 bg-white/95 dark:bg-[#070b14]/95 backdrop-blur-md px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
-        <button
-          onClick={() => setMobileTab('editor')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'editor' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <Code2 className="w-4 h-4" />
-          <span>Editor</span>
-        </button>
-
-        <button
-          onClick={() => setMobileTab('files')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'files' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <FileCode className="w-4 h-4" />
-          <span>Files ({files.length})</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setRightTab('media');
-            setShowRightSidebar(true);
-            setMobileTab('media');
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
-            mobileTab === 'media' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Live Call</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setRightTab('chat');
-            setShowRightSidebar(true);
-            setMobileTab('chat');
-            setUnreadChatCount(0);
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer relative ${
-            mobileTab === 'chat' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>Chat</span>
-          {unreadChatCount > 0 && (
-            <span className="absolute top-1 right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] flex items-center justify-center font-bold">
-              {unreadChatCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => {
-            setShowBottomConsole(true);
-            setMobileTab('output');
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl text-[10px] font-bold transition cursor-pointer ${
-            mobileTab === 'output' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' : 'text-slate-500 dark:text-slate-400'
-          }`}
-        >
-          <Terminal className="w-4 h-4" />
-          <span>Output</span>
-        </button>
+        {/* Collapsed Right Sidebar Rail */}
+        {!showRightSidebar && (
+          <div className="flex w-12 border-l border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-[#070b14] flex-col items-center py-3 gap-3 shrink-0">
+            <button
+              onClick={() => setShowRightSidebar(true)}
+              className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition cursor-pointer shadow-xs"
+              title="Expand right panel (Live Media & Chat)"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </button>
+            <div className="w-6 h-[1px] bg-slate-200 dark:bg-white/10" />
+            <button
+              onClick={() => {
+                setShowRightSidebar(true);
+                setRightTab('chat');
+                setUnreadChatCount(0);
+              }}
+              className="relative p-2 rounded-lg text-slate-500 hover:text-indigo-500 transition cursor-pointer"
+              title="Open Chat"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {unreadChatCount > 0 && (
+                <span className="absolute -top-1 -right-1 text-[9px] font-bold w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowRightSidebar(true);
+                setRightTab('media');
+              }}
+              className="relative p-2 rounded-lg text-slate-500 hover:text-indigo-500 transition cursor-pointer"
+              title={`Problems (${questions.length})`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="absolute -top-1 -right-1 text-[9px] font-bold w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center">
+                {questions.length}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Leave Session Confirmation Modal */}

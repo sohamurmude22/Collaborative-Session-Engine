@@ -67,6 +67,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   currentUserName,
   currentUserRole,
   currentUserAvatarUrl,
+  addSocketListener,
+  lastSocketMessage,
   initialParticipants = [],
   isDocked = false,
   onExpand
@@ -108,29 +110,80 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
-  const remoteAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  const attachedAudioElements = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-  // Unblock browser autoplay on user interaction
-  useEffect(() => {
-    const unlockAutoplay = () => {
-      Object.values(remoteAudioRefs.current).forEach((el) => {
-        if (el) {
-          el.muted = false;
-          el.play().catch(() => {});
-        }
+  // Attach remote audio track immediately to DOM element
+  const attachAudioTrack = useCallback((track: Track, participantIdentity: string) => {
+    if (track.kind !== Track.Kind.Audio) return;
+    const trackKey = `${participantIdentity}_${track.sid || 'audio'}`;
+    let audioEl = attachedAudioElements.current.get(trackKey);
+
+    if (!audioEl) {
+      audioEl = (track as any).attach() as HTMLAudioElement;
+      audioEl.id = `livekit-audio-${trackKey}`;
+      audioEl.style.display = 'none';
+      document.body.appendChild(audioEl);
+      attachedAudioElements.current.set(trackKey, audioEl);
+    } else {
+      (track as any).attach(audioEl);
+    }
+
+    audioEl.volume = 1.0;
+    audioEl.muted = false;
+    const playPromise = audioEl.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[LiveKit] Autoplay prevented, will resume on interaction:', err);
+        setAutoplayBlocked(true);
       });
-      setAutoplayBlocked(false);
+    }
+  }, []);
+
+  const detachAudioTrack = useCallback((track: Track, participantIdentity: string) => {
+    const trackKey = `${participantIdentity}_${track.sid || 'audio'}`;
+    const audioEl = attachedAudioElements.current.get(trackKey);
+    if (audioEl) {
+      track.detach(audioEl);
+      audioEl.remove();
+      attachedAudioElements.current.delete(trackKey);
+    } else {
+      track.detach();
+    }
+  }, []);
+
+  // Unlock browser audio globally
+  const unlockAudio = useCallback(async () => {
+    if (roomRef.current) {
+      try {
+        await roomRef.current.startAudio();
+      } catch {}
+    }
+    attachedAudioElements.current.forEach((el) => {
+      el.muted = false;
+      el.volume = 1.0;
+      el.play().catch(() => {});
+    });
+    setAutoplayBlocked(false);
+  }, []);
+
+  // Listen for interaction events to unlock audio continuously
+  useEffect(() => {
+    const onUserInteraction = () => {
+      unlockAudio();
     };
 
-    window.addEventListener('click', unlockAutoplay, { once: true });
-    window.addEventListener('keydown', unlockAutoplay, { once: true });
-    window.addEventListener('touchstart', unlockAutoplay, { once: true });
+    window.addEventListener('click', onUserInteraction);
+    window.addEventListener('keydown', onUserInteraction);
+    window.addEventListener('touchstart', onUserInteraction);
+    window.addEventListener('pointerdown', onUserInteraction);
+
     return () => {
-      window.removeEventListener('click', unlockAutoplay);
-      window.removeEventListener('keydown', unlockAutoplay);
-      window.removeEventListener('touchstart', unlockAutoplay);
+      window.removeEventListener('click', onUserInteraction);
+      window.removeEventListener('keydown', onUserInteraction);
+      window.removeEventListener('touchstart', onUserInteraction);
+      window.removeEventListener('pointerdown', onUserInteraction);
     };
-  }, []);
+  }, [unlockAudio]);
 
   // Parse metadata helper
   const parseParticipantMeta = (metaStr?: string): { role: string; avatarUrl?: string } => {
@@ -165,17 +218,24 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         throw new Error('Failed to obtain LiveKit room access token.');
       }
 
-      // 2. Initialize LiveKit Room instance
+      // 2. Initialize LiveKit Room instance with optimal low-latency audio defaults
       const room = new Room({
-        adaptiveStream: true,
-        dynacast: true,
-        videoCaptureDefaults: {
-          resolution: VideoPresets.h720.resolution
+        adaptiveStream: false,
+        dynacast: false,
+        stopLocalTrackOnUnpublish: false,
+        publishDefaults: {
+          stopMicTrackOnMute: false, // Instant unmute with 0ms OS hardware delay
+          audioPreset: { maxBitrate: 48000 }
         },
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000
+        },
+        videoCaptureDefaults: {
+          resolution: VideoPresets.h720.resolution
         }
       });
 
@@ -239,6 +299,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               }
             }, 10);
           } else if (track.kind === Track.Kind.Audio) {
+            attachAudioTrack(track, participant.identity);
+
             setPeers((prev) => ({
               ...prev,
               [participant.identity]: {
@@ -254,17 +316,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                 isMicOn: true
               }
             }));
-
-            // Attach to remote audio element
-            setTimeout(() => {
-              const audioEl = remoteAudioRefs.current[participant.identity];
-              if (audioEl) {
-                track.attach(audioEl);
-                audioEl.volume = 1.0;
-                audioEl.muted = false;
-                audioEl.play().catch(() => setAutoplayBlocked(true));
-              }
-            }, 10);
           }
         }
       );
@@ -273,8 +324,8 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       room.on(
         RoomEvent.TrackUnsubscribed,
         (track: Track, _publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-          track.detach();
           if (track.kind === Track.Kind.Video) {
+            track.detach();
             setPeers((prev) => {
               if (!prev[participant.identity]) return prev;
               return {
@@ -287,6 +338,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               };
             });
           } else if (track.kind === Track.Kind.Audio) {
+            detachAudioTrack(track, participant.identity);
             setPeers((prev) => {
               if (!prev[participant.identity]) return prev;
               return {
@@ -327,6 +379,9 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
           if (publication.kind === Track.Kind.Audio) setIsMicOn(true);
           if (publication.kind === Track.Kind.Video) setIsCamOn(true);
         } else {
+          if (publication.kind === Track.Kind.Audio && publication.track) {
+            attachAudioTrack(publication.track, participant.identity);
+          }
           setPeers((prev) => {
             if (!prev[participant.identity]) return prev;
             return {
@@ -362,9 +417,23 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
       await room.connect(wsUrl || 'ws://127.0.0.1:7880', token);
       setConnectionStatus('connected');
 
-      // Populate existing remote participants in room
+      // Populate and connect existing remote participants in room
       room.remoteParticipants.forEach((participant) => {
         const meta = parseParticipantMeta(participant.metadata);
+        let existingAudioTrack: Track | undefined;
+        let existingVideoTrack: Track | undefined;
+
+        participant.trackPublications.forEach((pub) => {
+          if (pub.track && pub.isSubscribed) {
+            if (pub.kind === Track.Kind.Audio) {
+              existingAudioTrack = pub.track;
+              attachAudioTrack(pub.track, participant.identity);
+            } else if (pub.kind === Track.Kind.Video) {
+              existingVideoTrack = pub.track;
+            }
+          }
+        });
+
         setPeers((prev) => ({
           ...prev,
           [participant.identity]: {
@@ -372,36 +441,32 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
             name: participant.name || 'Collaborator',
             role: meta.role,
             avatarUrl: meta.avatarUrl,
-            isMicOn: participant.isMicrophoneEnabled,
-            isCamOn: participant.isCameraEnabled,
-            isSpeaking: participant.isSpeaking
+            isMicOn: participant.isMicrophoneEnabled || !!existingAudioTrack,
+            isCamOn: participant.isCameraEnabled || !!existingVideoTrack,
+            isSpeaking: participant.isSpeaking,
+            audioTrack: existingAudioTrack,
+            videoTrack: existingVideoTrack
           }
         }));
 
-        participant.trackPublications.forEach((pub) => {
-          if (pub.track && pub.isSubscribed) {
-            if (pub.kind === Track.Kind.Video) {
-              const videoEl = remoteVideoRefs.current[participant.identity];
-              if (videoEl) {
-                pub.track.attach(videoEl);
-              }
-            } else if (pub.kind === Track.Kind.Audio) {
-              const audioEl = remoteAudioRefs.current[participant.identity];
-              if (audioEl) {
-                pub.track.attach(audioEl);
-              }
+        if (existingVideoTrack) {
+          setTimeout(() => {
+            const videoEl = remoteVideoRefs.current[participant.identity];
+            if (videoEl && existingVideoTrack) {
+              existingVideoTrack.attach(videoEl);
+              videoEl.play().catch(() => {});
             }
-          }
-        });
+          }, 50);
+        }
       });
     } catch (err: any) {
       console.warn('[LiveKit] Connection error:', err);
       setConnectionStatus('error');
       setErrorMessage(err.message || 'Failed to connect to LiveKit room.');
     }
-  }, [sessionId, currentUserId]);
+  }, [sessionId, currentUserId, attachAudioTrack, detachAudioTrack]);
 
-  // Initial connect
+  // Initial connect and cleanup
   useEffect(() => {
     connectToLiveKit();
 
@@ -410,8 +475,44 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
         roomRef.current.disconnect();
         roomRef.current = null;
       }
+      attachedAudioElements.current.forEach((el) => {
+        el.remove();
+      });
+      attachedAudioElements.current.clear();
     };
   }, [connectToLiveKit]);
+
+  // Sync remote tracks helper for WebSocket updates
+  const syncRemoteTracks = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    room.remoteParticipants.forEach((participant) => {
+      participant.trackPublications.forEach((pub) => {
+        if (pub.track && pub.isSubscribed && pub.kind === Track.Kind.Audio) {
+          attachAudioTrack(pub.track, participant.identity);
+        }
+      });
+    });
+  }, [attachAudioTrack]);
+
+  // Re-sync on WebSocket events
+  useEffect(() => {
+    if (!addSocketListener) return;
+    const unsubscribe = addSocketListener((msg: any) => {
+      if (msg.type === 'USER_JOINED' || msg.type === 'USER_LEFT' || msg.type === 'SESSION_SYNC') {
+        setTimeout(syncRemoteTracks, 300);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [addSocketListener, syncRemoteTracks]);
+
+  useEffect(() => {
+    if (lastSocketMessage && (lastSocketMessage.type === 'USER_JOINED' || lastSocketMessage.type === 'USER_PRESENCE_UPDATED')) {
+      setTimeout(syncRemoteTracks, 300);
+    }
+  }, [lastSocketMessage, syncRemoteTracks]);
 
   // Re-sync initial participants if provided
   useEffect(() => {
@@ -443,6 +544,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     if (!room) return;
 
     try {
+      unlockAudio();
       const nextState = !isMicOn;
       await room.localParticipant.setMicrophoneEnabled(nextState);
       setIsMicOn(nextState);
@@ -458,6 +560,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
     if (!room) return;
 
     try {
+      unlockAudio();
       const nextState = !isCamOn;
       await room.localParticipant.setCameraEnabled(nextState);
       setIsCamOn(nextState);
@@ -495,6 +598,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   // Play Speaker Test Chime
   const playSpeakerTestChime = () => {
     try {
+      unlockAudio();
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
@@ -519,14 +623,7 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
   };
 
   const handleEnableSound = () => {
-    Object.values(remoteAudioRefs.current).forEach((el) => {
-      if (el) {
-        el.muted = false;
-        el.volume = 1.0;
-        el.play().catch(() => {});
-      }
-    });
-    setAutoplayBlocked(false);
+    unlockAudio();
   };
 
   const activePeerList = Object.values(peers);
@@ -582,23 +679,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
               <span>Media</span>
             </button>
           )}
-        </div>
-
-        {/* Hidden persistent audio elements */}
-        <div className="sr-only">
-          {activePeerList.map((peer) => (
-            <audio
-              key={peer.identity}
-              ref={(el) => {
-                remoteAudioRefs.current[peer.identity] = el;
-                if (el && peer.audioTrack) {
-                  peer.audioTrack.attach(el);
-                }
-              }}
-              autoPlay
-              playsInline
-            />
-          ))}
         </div>
       </div>
     );
@@ -774,22 +854,6 @@ export const LiveMediaSession: React.FC<LiveMediaSessionProps> = ({
                     playsInline
                     muted
                     className={`w-full h-full object-cover ${peer.isCamOn && peer.videoTrack ? 'block' : 'hidden'}`}
-                  />
-
-                  {/* Remote Audio Element */}
-                  <audio
-                    ref={(el) => {
-                      remoteAudioRefs.current[peer.identity] = el;
-                      if (el && peer.audioTrack) {
-                        peer.audioTrack.attach(el);
-                        el.volume = 1.0;
-                        el.muted = false;
-                        el.play().catch(() => setAutoplayBlocked(true));
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    className="sr-only"
                   />
 
                   {/* Remote Avatar Placeholder */}
